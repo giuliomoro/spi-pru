@@ -58,11 +58,7 @@ public:
 	{
 		for(auto cal : calibration)
 			delete cal;
-		unsigned int numBoards = _bt->getNumBoards();
-		calibration.resize(numBoards);
-		_calibratingTop.resize(numBoards);
-		_calibratingBottom.resize(numBoards);
-		for(unsigned int n = 0; n < numBoards; ++n)
+		for(unsigned int n = 0; n < _bt->getNumBoards(); ++n)
 		{
 			int numKeys = _bt->getLastActiveKey(n) - _bt->getFirstActiveKey(n) + 1;
 			calibration[n] = new Calibration(numKeys);

@@ -3,9 +3,10 @@
 #include <signal.h>
 #include <Gpio.h>
 #include <WriteFile.h>
-
-unsigned int gAuxiliaryTaskStackSize  = 1 << 17;
+int gXenomaiInited = 0; // required by WriteFile's AuxiliaryTask
+unsigned int gAuxiliaryTaskStackSize  = 1 << 17; // required by WriteFile's AuxiliaryTask
 volatile int gShouldStop = 0;
+
 void catch_function(int signo){
 	gShouldStop = 1;
 }
@@ -21,7 +22,7 @@ void postCallback(void* arg, float* buffer, unsigned int length)
 	for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
 	{
 		values[n-bt.getLowestNote()] = keys->getNoteValue(n);
-    }
+	}
 	file.log(values, numKeys);
 }
 
@@ -46,7 +47,7 @@ int main(int argc, char** argv)
 			inout = noinout;
 			continue;
 		}
-		if(inout != noinout);
+		if(inout != noinout)
 		{
 			--argc;
 			++argv;

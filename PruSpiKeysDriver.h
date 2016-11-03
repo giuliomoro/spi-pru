@@ -3,7 +3,7 @@
 
 #include <Gpio.h>
 #include <string.h>
-#include <native/task.h>
+#include <pthread.h>
 
 #define PRU_NUM 1
 #define PRU_DATA_BUFFER_SIZE 0x400
@@ -129,7 +129,7 @@ private:
 	bool _pruEnabled;
 	bool _isPruRunning;
 	bool _isLoopRunning;
-	RT_TASK _loopTask;
+	pthread_t _loopTask;
 	uint32_t _validData;
 	volatile int _shouldStop;
 	volatile int* _externalShouldStop;

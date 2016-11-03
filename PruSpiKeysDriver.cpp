@@ -2,6 +2,12 @@
 #include <pruss_intc_mapping.h>
 #include "PruSpiKeysDriver.h"
 #include <inttypes.h>
+#include </root/Bela/include/xenomai_wraps.h>
+// Xenomai-specific includes
+#if XENOMAI_MAJOR == 3
+#include <xenomai/init.h>
+#endif
+extern int gXenomaiInited;
 
 #define GPIO_DEBUG
 
@@ -104,31 +110,31 @@ int PruSpiKeysDriver::start(volatile int* shouldStop, void(*callback)(void*), vo
 	else 
 		_callback = NULL;
 
-	int ret = rt_task_create(&_loopTask, _loopTaskName, 0, _loopTaskPriority, T_FPU | T_JOINABLE | T_SUSP);
-	if(ret)
-		return ret;
-
 	_callbackArg = arg;
 	//printf("TODO: set flag on PRU so that it switches to MASTER_MODE\n");
 
-	ret = rt_task_start(&_loopTask, loop, this);
-	if(ret){
-		return ret;
-	}
-
 	_shouldStop = 0;
-
-	ret = rt_task_resume(&_loopTask);
-	if(ret){
-		return ret;
+	if(!gXenomaiInited)
+	{
+		int argc = 0;
+		char *const *argv;
+		xenomai_init(&argc, &argv);
+		gXenomaiInited = 1;
 	}
+	int ret = create_and_start_thread(&_loopTask, _loopTaskName, _loopTaskPriority, 0, (pthread_callback_t*)loop, (void*)this);
+	if(ret)
+	{
+		fprintf(stderr, "Failed to create thread: %d\n", ret);
+		return 0;
+	}
+
 	return 1;
 }
 
 void PruSpiKeysDriver::stopAndWait()
 {
 	stop();
-	rt_task_join(&_loopTask);
+	__wrap_pthread_join(_loopTask, NULL);
 }
 void PruSpiKeysDriver::stop()
 {
@@ -172,7 +178,7 @@ void PruSpiKeysDriver::loop(void* arg)
 	while(!that->shouldStop()){
 		int buffer = that->getActiveBuffer();
 		if(lastBuffer == buffer){
-			rt_task_sleep(300000);
+			task_sleep_ns(300000);
 			continue;
 		}
 

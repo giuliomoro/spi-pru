@@ -40,9 +40,18 @@ int Keys::start(BoardsTopology* bt, volatile int* shouldStop /* = NULL */)
 		for(auto &val : buffer)
 			val = 0;
 	}
+	unsigned int numBoards = _bt->getNumBoards();
+	calibration.resize(numBoards);
+	_calibratingTop.resize(numBoards);
+	_calibratingBottom.resize(numBoards);
 
+	for(unsigned int n = 0; n < numBoards; ++n)
+	{
+		_calibratingTop[n] = 0;
+		_calibratingBottom[n] = 0;
+	}
 	int ret;
-	ret = _driver.init(bt->getNumBoards());
+	ret = _driver.init(numBoards);
 	if(ret < 0)
 		return ret;
 		

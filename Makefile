@@ -10,12 +10,40 @@ OUTPUT_SHARED=DemoKeysShared
 OPT_FLAGS ?= -O3 -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
 PRU_OBJS ?= spi-pru.bin
 
+XENO_CONFIG=/usr/xenomai/bin/xeno-config
+XENOMAI_VERSION=$(shell $(XENO_CONFIG) --version | grep -o "2\.6" || echo "3")
+XENOMAI_SKIN=posix
+ifeq ($(XENOMAI_VERSION),2.6)
+XENOMAI_MAJOR=2
+endif
+ifeq ($(XENOMAI_VERSION),3)
+XENOMAI_MAJOR=3
+endif
+
+# Xenomai flags
+DEFAULT_XENOMAI_CFLAGS := $(shell $(XENO_CONFIG) --skin=$(XENOMAI_SKIN) --cflags)
+DEFAULT_XENOMAI_CFLAGS += -DXENOMAI_SKIN_$(XENOMAI_SKIN) -DXENOMAI_MAJOR=$(XENOMAI_MAJOR)
+# Cleaning up any `pie` introduced because of gcc 6.3, as it would confuse clang
+DEFAULT_XENOMAI_CFLAGS := $(filter-out -no-pie, $(DEFAULT_XENOMAI_CFLAGS))
+DEFAULT_XENOMAI_CFLAGS := $(filter-out -fno-pie, $(DEFAULT_XENOMAI_CFLAGS))
+SED_REMOVE_WRAPPERS_REGEX=sed "s/-Wl,@[A-Za-z_/]*.wrappers\>//g"
+ifeq ($(XENOMAI_VERSION),2.6)
+  DEFAULT_XENOMAI_LDFLAGS := $(shell $(XENO_CONFIG) --skin=$(XENOMAI_SKIN) --ldflags | $(SED_REMOVE_WRAPPERS_REGEX))
+else
+  DEFAULT_XENOMAI_LDFLAGS := $(shell $(XENO_CONFIG) --skin=$(XENOMAI_SKIN) --ldflags --no-auto-init | $(SED_REMOVE_WRAPPERS_REGEX))
+endif
+DEFAULT_XENOMAI_LDFLAGS := $(filter-out -no-pie, $(DEFAULT_XENOMAI_LDFLAGS))
+DEFAULT_XENOMAI_LDFLAGS := $(filter-out -fno-pie, $(DEFAULT_XENOMAI_LDFLAGS))
+# remove posix wrappers if present: explicitly call __wrap_pthread_... when needed
+DEFAULT_XENOMAI_LDFLAGS := $(filter-out -Wlusr/xenomai/lib/cobalt.wrappers, $(DEFAULT_XENOMAI_LDFLAGS))
+
+
 C_OBJS ?= Keys_c.o BoardsTopology_c.o
-CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include $(OPT_FLAGS)
+CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include $(DEFAULT_XENOMAI_CFLAGS) $(OPT_FLAGS)
 CPPFLAGS ?= $(CFLAGS) -std=c++11
-LDFLAGS ?= -L/usr/xenomai/lib -L/root/Bela/lib/
-LDLIBS = -lrt -lnative -lxenomai -lprussdrv -lbelaextra -L/root/Bela/lib -lNE10
-OBJS ?= GPIOcontrol.o Keys.o Boards.o PruSpiKeysDriver.o Gpio.o
+LDFLAGS ?= -L/root/Bela/lib/ 
+LDLIBS = -lbelaextra /root/Bela/lib/libNE10.a -lprussdrv -L/root/Bela/lib $(DEFAULT_XENOMAI_LDFLAGS)
+OBJS ?= Keys.o Boards.o PruSpiKeysDriver.o 
 DEMO_OBJS ?= DemoKeys.o $(OBJS)
 TEST_OBJS ?= TestKeys.o $(OBJS)
 OLD_OBJS ?= main.o loader.o $(OBJS)
