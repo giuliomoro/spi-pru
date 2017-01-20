@@ -27,7 +27,7 @@
 #define SPICH0_WL        8       // Word length
 #define SPICH0_WL_BYTES  (SPICH0_WL >> 3) // Word length in bytes
 #define SPICH0_CLK_MODE  0       // SPI mode
-#define SPICH0_CLK_DIV   2      // Clock divider (48MHz / 2^n)
+#define SPICH0_CLK_DIV   3      // Clock divider (48MHz / 2^n)
 #define SPICH0_DPE       1       // d0 = receive, d1 = transmit
 #define SPICH0_CS_GPIO      GPIO1
 #define SPICH0_CS_PIN    (1<<17) // GPIO1:17 = P9 pin 23
@@ -163,10 +163,10 @@ DELAY_LOOP:
     /* Set RW* line low for transmit */
     CLEAR_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
     /* Set relevant CS/ line(s) low */
-    DELAY 434
+    DELAY 1000
     CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
     /* Short delay, ~2us, to let slave device prepare */
-    DELAY 434
+    DELAY 1000
     MOV reg_transmitted_words, 0 // reg_transmitted_words counts how many words we transmitted
     // empty the register, so that words shorter than 32bits find it empty
     MOV reg_curr_word, 0
@@ -194,14 +194,14 @@ WRITE_BUFFER_LOOP:
 .endm
 
 .macro BUS_MODE_MASTER_RECEIVER
-.mparam slaveDevice, buffer, transmitLength
+.mparam slaveDevice, buffer, transmitLength, dynamicLengthLocation
     /* Set RW* line high for receive */
     SET_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
     /* Set relevant CS/ line(s) low */
-    DELAY 434
+    DELAY 1000
     CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
     /* Short delay, ~2us, to let slave device prepare */
-    DELAY 434
+    DELAY 1000
     MOV reg_transmitted_words, 0 // reg_transmitted_words counts how many words we transmitted
     // empty the register, so that words shorter than 32bits find it empty
     MOV reg_curr_word, 0
@@ -223,6 +223,18 @@ WRITE_BUFFER_LOOP:
     SUB r27, reg_transmitted_words, SPICH0_WL_BYTES
     SBBO reg_curr_word, buffer, r27, SPICH0_WL_BYTES
 #endif
+    QBNE CHECK_DYNAMIC_LENGTH_DONE, reg_transmitted_words, dynamicLengthLocation
+    // if we are using dynamic length, then here we have just received it,
+    // so replace existing length with it after:
+    // a) extend it to a multiple of 4 and adding + 4 for CRC,
+    // that is add 7 ...
+    ADD reg_curr_word, reg_curr_word, 7
+    // ... and clear  lower two bits
+    CLR reg_curr_word, 0
+    CLR reg_curr_word, 1 
+    // b) and capping it anyhow with the requested transmitLength
+    MIN transmitLength, reg_curr_word, transmitLength
+CHECK_DYNAMIC_LENGTH_DONE:
     QBLT WRITE_BUFFER_LOOP, transmitLength, reg_transmitted_words
     
     /* Set relevant CS/ line high */
@@ -327,10 +339,19 @@ WAIT_FOR_ARM:
     //0x0036
     QBBC TRANSMIT, r1, 31
 RECEIVE:
-    // mask out bit 31
-    MOV r0, 1 << 31
-    XOR r1, r1, r0
-    BUS_MODE_MASTER_RECEIVER 0, r2, r1
+    // the length will have b30 set if the provided length
+    // is an upper limit and actual length is in the first
+    // received byte
+    QBBC RECEIVE_FIXED_LENGTH, r1, 30
+    MOV r3, 1
+    QBA DO_RECEIVE
+RECEIVE_FIXED_LENGTH:
+    MOV r3, 0
+DO_RECEIVE:
+    // mask out bit flags (upper 16 bits)
+    LSL r1, r1, 16
+    LSR r1, r1, 16
+    BUS_MODE_MASTER_RECEIVER 0, r2, r1, r3
     QBA COMMUNICATION_DONE
 TRANSMIT: 
     BUS_MODE_MASTER_TRANSMITTER 0, r2, r1

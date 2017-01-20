@@ -11,6 +11,35 @@
 *
 ******************************************************************************/
 
+// Standard header files
+#include <stdio.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <string.h>
+#include <inttypes.h>
+#include </root/Bela/include/Gpio.h>
+
+
+const uint32_t Polynomial = 0x04C11DB7;
+//const uint32_t Polynomial = 0xEDB88320;
+
+uint32_t crc32_bitwise(const void* data, size_t length)
+{
+  uint32_t previousCrc32 = 0;
+  uint32_t crc = ~previousCrc32;
+  unsigned char* current = (unsigned char*) data;
+  while (length--)
+  {
+	unsigned int data = *current++;
+    crc ^= data;
+    for (unsigned int j = 0; j < 8; j++)
+      crc = (crc >> 1) ^ (-(int)(crc & 1) & Polynomial);
+  }
+  return ~crc; // same as crc ^ 0xFFFFFFFF
+}
+
 
 /* Commands to communicate with the other boards */
 enum {
@@ -24,18 +53,31 @@ enum {
 	kBusCommandRGBLEDAllOff
 };
 
-// Standard header files
-#include <stdio.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <unistd.h>
-#include <string.h>
-#include <inttypes.h>
 
 // Driver header file
 #include "prussdrv.h"
 #include "pruss_intc_mapping.h"
+#include <GPIOcontrol.h>
+#include <digital_gpio_mapping.h>
+
+short int digitalPins[NUM_DIGITALS] = {
+  GPIO_NO_BIT_0,
+  GPIO_NO_BIT_1,
+  GPIO_NO_BIT_2,
+  GPIO_NO_BIT_3,
+  GPIO_NO_BIT_4,
+  GPIO_NO_BIT_5,
+  GPIO_NO_BIT_6,
+  GPIO_NO_BIT_7,
+  GPIO_NO_BIT_8,
+  GPIO_NO_BIT_9,
+  GPIO_NO_BIT_10,
+  GPIO_NO_BIT_11,
+  GPIO_NO_BIT_12,
+  GPIO_NO_BIT_13,
+  GPIO_NO_BIT_14,
+  GPIO_NO_BIT_15,
+};
 
 #define PRU_NUM 	 0
 #define ADDEND1	 	 0x98765400u
@@ -48,8 +90,8 @@ enum {
 
 #define PRUSS0_SHARED_DATARAM    4
 
-#include <GPIOcontrol.h>
-#include <digital_gpio_mapping.h>
+
+extern int gShouldStop;
 
 /* Pack three 12-bit values plus an index into a 6-byte data structure for transmission
  * on the bus.
@@ -147,25 +189,6 @@ void rgbledPackBufferWithHSV(uint8_t *buffer, uint8_t led, uint8_t hue, uint8_t 
 
 const unsigned int kPruGPIODACSyncPin = 49;	// GPIO1(17); P9-23
 const unsigned int kPruGPIOADCSyncPin = 48; // GPIO1(16); P9-15
-
-short int digitalPins[NUM_DIGITALS] = {
-		GPIO_NO_BIT_0,
-		GPIO_NO_BIT_1,
-		GPIO_NO_BIT_2,
-		GPIO_NO_BIT_3,
-		GPIO_NO_BIT_4,
-		GPIO_NO_BIT_5,
-		GPIO_NO_BIT_6,
-		GPIO_NO_BIT_7,
-		GPIO_NO_BIT_8,
-		GPIO_NO_BIT_9,
-		GPIO_NO_BIT_10,
-		GPIO_NO_BIT_11,
-		GPIO_NO_BIT_12,
-		GPIO_NO_BIT_13,
-		GPIO_NO_BIT_14,
-		GPIO_NO_BIT_15,
-};
 
 int prepareGPIO(int include_led)
 {
@@ -278,8 +301,27 @@ void busMasterQueryConnectedDevices(uint8_t* gBusSlaveTransmitBuffer, uint32_t* 
 }
 #endif
 
-int main (void)
+static volatile uint8_t* data;
+
+int16_t get_key_position_raw(unsigned int n){
+    return (*(int16_t*)(&data[n * 2 + 8]));
+}
+
+float get_key_position(unsigned int n){
+	float value = get_key_position_raw(n) / 4096.f;
+	if (value < 0)
+		return 0;
+	else
+		return value;
+}
+
+int spi_pru_loader (void)
 {
+	Gpio testGpio;
+	testGpio.open(66, 1);
+	Gpio testGpio2;
+	testGpio2.open(67, 1);
+
     if(prepareGPIO(1)){
 	}
 	unsigned int ret;
@@ -308,8 +350,8 @@ int main (void)
         return 1;
     }
     volatile uint32_t* t32 = (uint32_t*)pruMem;
-    volatile uint8_t* data = (uint8_t*)&t32[1];
-    // disable transmisssions before starting the PRU
+    data = (uint8_t*)&t32[1];
+    // disable transmissions before starting the PRU
     t32[0] = 0;
     uint32_t length;
     int numLeds = 25;
@@ -342,9 +384,10 @@ int main (void)
     if(0){
         int h = 0;
         int c[3] = {0, 1500, 3000};
-        float in = 10;
+        int in = 10;
         int inc[3] = {in, in, in};
-        for(int n = 0; n < 100; ++n){
+		int numTimes = 100;
+        for(int j = 0; j < numTimes; ++j){
             memset(pruMem, 0, 100);
             data[0] = kBusCommandRGBLEDSetColors;
             data[1] = numLeds;
@@ -354,6 +397,11 @@ int main (void)
                 uint16_t red = c[0]; // h > 1000 ? 0 : 4095;
                 uint16_t green = c[1]; // h > 2000 ? 0 : 4095;
                 uint16_t blue = c[2]; //h > 3000 ? 0 : 4095;
+				if(j == numTimes - 1){
+					red = 0;
+					green = 0;
+					blue = 0;
+				}
                 rgbledPackBuffer((uint8_t*)&data[2 + p], led, red, green, blue);
                 p += 6;
                 for(int n = 0; n < 3; ++n){
@@ -366,13 +414,12 @@ int main (void)
                 printf("r: %d, g: %d, b: %d\n", c[0], c[1], c[2]);
             }
             t32[0] = length; 
-            printf("%10d---------\nlength: %d\n%#x %#x %#x\n-------------\n", n, length, 
+            printf("%10d---------\nlength: %d\n%#x %#x %#x\n-------------\n", j, length, 
               t32[0], t32[1], t32[2]);
-            usleep(10000);
         }
     }
 
-    while(t32[0] != 0){
+    while(t32[0] != 0 && !gShouldStop){
         printf("waiting for previous tasks to complete\n");
     }
     printf("done\n");
@@ -396,57 +443,133 @@ int main (void)
     }
     uint32_t ticks = 0;
     int verbose = 0;
-    while(1){
-        usleep(1000);
+    while(!gShouldStop){
+        testGpio.clear();
+        usleep(900);
 
         //Ask devices to start scan
         if(verbose)
             printf("Ask for a new scan\n");
         length = 5;
-        memset((void*)data, 0, 100);
+        memset((void*)data, 0, 300);
         data[0] = kBusCommandStartScan;
         memcpy((uint8_t*)&data[1], &ticks, 4); /* Timestamp goes in bytes 1-4 */
         t32[0] = length; 
+        testGpio2.set();
         if(verbose)
             printf("---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
               t32[0], t32[1], t32[2]);
         while(t32[0] != 0);
+        testGpio2.clear();
         if(verbose)
             printf("done---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
               t32[0], t32[1], t32[2]);
 
-        usleep(100);
+        usleep(0);
         //retrieve results
         if(verbose)
             printf("Retrieve results\n");
-        length = 56;
-        memset((void*)data, 0, 100);
-        t32[0] = length | (1 << 31);
+        length = 255;
+        memset((void*)data, 0, length);
+        testGpio2.set();
+        t32[0] =        //tell PRU to start transaction
+            length |    // transaction is length bytes long
+            (1 << 31) | // it is a receive
+            (1 << 30);  // the first byte of the transmission contains the actual length of the transmission, so this can be safely terminated earlier if shorter than expected. A 4-byte CRC might follow actualLength bytes
         if(verbose)
-            printf("---------\nlength: %#d\n%#x %#x %#x\n-------------\n", length, 
+            printf("---------\nlength: %d\n%#x %#x %#x\n-------------\n", length, 
               t32[0], t32[1], t32[2]);
         while(t32[0] != 0);
+        testGpio2.clear();
+
         if(verbose)
-            printf("done---------\nlength: %#d\n%#x %#x %#x\n-------------\n", length, 
+            printf("done---------\nlength: %d\n%#x %#x %#x\n-------------\n", length, 
               t32[0], t32[1], t32[2]);
-        if(ticks % 100 == 1){
-            printf("Results:\n");
-            printf("Received length: %d\n", (uint32_t)data[0]);  
+        if(ticks % 100 == 1)
+        ;
+        // static int off = 0;
+		int kFrameTypeAnalog = 19;
+        //if(get_key_position(0) <= 0)
+		
+		//static int count = 0;
+		//if(count++ % 100 == 0)
+		//if(count++ % 100 == 0 || get_key_position_raw(0) < 100)
+		int print = 0;
+        static int count = 0;
+        static int succesful = 0;
+        static int corrupted = 0;
+        static int voids = 0;
+        if(count++ % 100 == 0) {
+            printf("%4d\n", get_key_position_raw(0));
+        }
+        if(count % 1000 == 0)
+        {
+            printf("succesful: %d(%.3f%%), corrupted: %d(%.3f%%), void: %d(%.3f%%)\n",
+                succesful, succesful/(float)count * 100,
+                corrupted, corrupted/(float)count* 100,
+                voids, voids/(float)count* 100
+            );
+        }
+        count++;
+		uint32_t receivedCrc;
+		uint16_t receivedLength = data[0];
+        //TODO: cap received length to requested length
+		uint16_t alignedReceivedLength = (receivedLength + 3) & 0xFFFC;
+		uint32_t computedCrc = crc32_bitwise((void*)data, alignedReceivedLength >> 2);
+		memcpy(&receivedCrc, (uint8_t*)&data[alignedReceivedLength], 4);
+		if(receivedCrc != computedCrc){
+			if(receivedLength != 255){
+                ++corrupted;
+				print = 1;
+			    testGpio.set();
+            }
+            else {
+                int isvoid = 1;
+                for(int n = 0; n < receivedLength - 4; ++n){
+                    if(data[n] != 0xff){
+                        print = 1;
+                        isvoid = 0;
+                        break;
+                    }
+                }
+                if(isvoid)
+                    ++voids;
+                else
+                    ++corrupted;
+			    testGpio.set();
+            }
+		} else 
+            ++succesful;
+        print = 0;
+        if(print)
+		{
+			printf("CRC, received: %#10x, computed: %#10x\n", receivedCrc, computedCrc);
+        	// ++off;
+            printf("Results(%d):\n", count);
+            printf("Received length: %d (%d)\n", receivedLength, alignedReceivedLength);  
             printf("More data: %d\n", (uint32_t)data[1]);
-            int kFrameTypeAnalog = 19;
             printf("Type: %#x %s\n", (uint32_t)data[2], data[2] == kFrameTypeAnalog ? "correct" : "unknown");
             printf("Zero: %#x\n", (uint32_t)data[3]);
-            printf("Timestamp: %10d\n", *(uint32_t*)&data[4]);
-            for(int n = 8; n < length; n += 2){
-                int value = (*(int16_t*)(&data[n]));
-                if(value < 0)
-                    value = 0;
-                printf("%6.3f ", (float)value / 4096.f);
+            printf("Timestamp: rec %10d, trans %10d\n", *(uint32_t*)&data[4], ticks);
+            // get_key_position();
+            for(int n = 8, j = 0; n < receivedLength; n += 2, j++){
+                printf("[%2d]:%#10x, ", j, (int)get_key_position_raw(j));
                 if((n - 6) % 8 == 0)
                     printf("\n");
             }
             printf("\n\n");
+			printf("Data:\n");
+			for(int n = 0; n < alignedReceivedLength + 4; ++n){
+				printf("%#x ", data[n]);
+			}
+			printf("\n\n");
+
+            // printf("off/ticks: %.2f%\n", off/(float)ticks);
         }
+	        // if(get_key_position(0) == 0){
+	        // 	printf("get_key_position(0) at %d ticks\n", ticks);
+	        // 	return 1;
+	        // }
         ticks++;
     }
 
