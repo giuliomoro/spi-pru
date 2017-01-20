@@ -27,7 +27,7 @@
 #define SPICH0_WL        8       // Word length
 #define SPICH0_WL_BYTES  (SPICH0_WL >> 3) // Word length in bytes
 #define SPICH0_CLK_MODE  0       // SPI mode
-#define SPICH0_CLK_DIV   3      // Clock divider (48MHz / 2^n)
+#define SPICH0_CLK_DIV   2      // Clock divider (48MHz / 2^n)
 #define SPICH0_DPE       1       // d0 = receive, d1 = transmit
 #define SPICH0_CS_GPIO      GPIO1
 #define SPICH0_CS_PIN    (1<<17) // GPIO1:17 = P9 pin 23
@@ -331,6 +331,7 @@ RECEIVE:
     MOV r0, 1 << 31
     XOR r1, r1, r0
     BUS_MODE_MASTER_RECEIVER 0, r2, r1
+    QBA COMMUNICATION_DONE
 TRANSMIT: 
     BUS_MODE_MASTER_TRANSMITTER 0, r2, r1
 COMMUNICATION_DONE:
