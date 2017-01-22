@@ -209,7 +209,8 @@ WRITE_BUFFER_LOOP:
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
 WRITE_BUFFER_LOOP:
 #ifdef DO_SPI
-    SPICH0_TX reg_curr_word
+    MOV r28, 0
+    SPICH0_TX r28
 #endif
     // before waiting, we preload the next word (if any)
     //0x0048

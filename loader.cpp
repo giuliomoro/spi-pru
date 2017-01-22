@@ -499,7 +499,7 @@ int spi_pru_loader (void)
         static int succesful = 0;
         static int corrupted = 0;
         static int voids = 0;
-        if(count++ % 100 == 0) {
+        if(count % 100 == 0) {
             printf("%4d\n", get_key_position_raw(0));
         }
         if(count % 1000 == 0)
