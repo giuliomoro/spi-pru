@@ -236,7 +236,6 @@ int prepareGPIO(int include_led)
 //*/
 
 static int mem_fd;
-static void *ddrMem, *sharedMem;
 
 static unsigned int *sharedMem_int;
 
@@ -429,7 +428,7 @@ int spi_pru_loader (void)
         t32[0] = length;
         do {
             printf("Delivering the kBusCommandStatus\n");
-        } while(t32[0] != 0);
+        } while(t32[0] != 0 && !gShouldStop);
 
         length = 8;
         t32[0] = length | (1 << 31);
@@ -437,41 +436,68 @@ int spi_pru_loader (void)
         printf("---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
           t32[0], t32[1], t32[2]);
             printf("Querying status\n");
-        while(t32[0] != 0);
+        while(t32[0] != 0 && !gShouldStop);
         printf("done---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
           t32[0], t32[1], t32[2]);
     }
     uint32_t ticks = 0;
     int verbose = 0;
+    uint8_t* startScan = 0x100 + (uint8_t*)pruMem;
+    uint32_t* log = (uint32_t*)( 0x200 + (uint8_t*)pruMem);
+	memset(log, 0, 100);
+    while(!gShouldStop && 0){
+        uint8_t command = startScan[0];
+        uint32_t time;
+		uint32_t ticks = log[0];
+		uint32_t voids = log[1];
+		uint32_t outofrange = log[2];
+		uint32_t value = log[3];
+		uint32_t succesful = ticks - voids - outofrange;
+		uint32_t count = ticks;
+		uint32_t corrupted = 0;
+		
+       	memcpy(&time, (uint8_t*)&startScan[1], 4);
+        printf("command: %u, time: %d\n", (uint32_t)command, time); 
+        printf("succesful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), void: %d(%.3f%%), value: %d, %d, %d %d\n",
+            succesful, succesful/(float)count * 100,
+            outofrange, outofrange/(float)count * 100,
+            corrupted, corrupted/(float)count* 100,
+            voids, voids/(float)count* 100,
+            get_key_position_raw(0), 
+            get_key_position_raw(1), 
+			value&0xFFFF,
+			(value >> 16) & 0xFFFF
+        );
+        usleep(1000000);
+    }
     while(!gShouldStop){
         testGpio.clear();
         usleep(900);
 
-        //Ask devices to start scan
-        if(verbose)
-            printf("Ask for a new scan\n");
-        length = 5;
-        memset((void*)data, 0, 300);
-        data[0] = kBusCommandStartScan;
-        memcpy((uint8_t*)&data[1], &ticks, 4); /* Timestamp goes in bytes 1-4 */
-        t32[0] = length; 
-        testGpio2.set();
-        if(verbose)
-            printf("---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
-              t32[0], t32[1], t32[2]);
-        while(t32[0] != 0);
-        testGpio2.clear();
-        if(verbose)
-            printf("done---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
-              t32[0], t32[1], t32[2]);
+		if(ticks % 2 == 0 || 1){
+			//Ask devices to start scan
+			if(verbose)
+				printf("Ask for a new scan\n");
+			length = 5;
+			memset((void*)data, 0, 300);
+			data[0] = kBusCommandStartScan;
+			memcpy((uint8_t*)&data[1], &ticks, 4); /* Timestamp goes in bytes 1-4 */
+			t32[0] = length; 
+			if(verbose)
+				printf("---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
+					t32[0], t32[1], t32[2]);
+			while(t32[0] != 0 && !gShouldStop);
+			if(verbose)
+				printf("done---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
+				t32[0], t32[1], t32[2]);
 
-        usleep(0);
+			usleep(0);
+		}
         //retrieve results
         if(verbose)
             printf("Retrieve results\n");
         length = 255;
         memset((void*)data, 0, length);
-        testGpio2.set();
         t32[0] =        //tell PRU to start transaction
             length |    // transaction is length bytes long
             (1 << 31) | // it is a receive
@@ -479,8 +505,9 @@ int spi_pru_loader (void)
         if(verbose)
             printf("---------\nlength: %d\n%#x %#x %#x\n-------------\n", length, 
               t32[0], t32[1], t32[2]);
-        while(t32[0] != 0);
-        testGpio2.clear();
+		testGpio2.set();
+        while(t32[0] != 0 && !gShouldStop);
+		testGpio2.clear();
 
         if(verbose)
             printf("done---------\nlength: %d\n%#x %#x %#x\n-------------\n", length, 
@@ -497,20 +524,26 @@ int spi_pru_loader (void)
 		int print = 0;
         static int count = 0;
         static int succesful = 0;
+        static int outofrange = 0;
         static int corrupted = 0;
         static int voids = 0;
         if(count % 100 == 0) {
-            printf("%4d\n", get_key_position_raw(0));
+            //print = 1;
+            //printf("%4d\n", get_key_position_raw(0));
         }
         if(count % 1000 == 0)
         {
-            printf("succesful: %d(%.3f%%), corrupted: %d(%.3f%%), void: %d(%.3f%%)\n",
+			print = 1;
+            printf("succesful: %d(%.3f%%), outofrange: %d(%.3f), corrupted: %d(%.3f%%), void: %d(%.3f%%), value: %d\n",
                 succesful, succesful/(float)count * 100,
+                outofrange, outofrange/(float)count * 100,
                 corrupted, corrupted/(float)count* 100,
-                voids, voids/(float)count* 100
+                voids, voids/(float)count* 100,
+                get_key_position_raw(0)
             );
         }
         count++;
+		//printf("%4d\n", get_key_position_raw(0));
 		uint32_t receivedCrc;
 		uint16_t receivedLength = data[0];
         //TODO: cap received length to requested length
@@ -534,13 +567,18 @@ int spi_pru_loader (void)
                 }
                 if(isvoid)
                     ++voids;
-                else
+                else {
                     ++corrupted;
+					print = 1;
+				}
 			    testGpio.set();
             }
-		} else 
-            ++succesful;
-        print = 0;
+		} else {
+			if(get_key_position_raw(0) < 100)
+				++outofrange;
+			else
+				++succesful;
+		}
         if(print)
 		{
 			printf("CRC, received: %#10x, computed: %#10x\n", receivedCrc, computedCrc);
@@ -553,7 +591,7 @@ int spi_pru_loader (void)
             printf("Timestamp: rec %10d, trans %10d\n", *(uint32_t*)&data[4], ticks);
             // get_key_position();
             for(int n = 8, j = 0; n < receivedLength; n += 2, j++){
-                printf("[%2d]:%#10x, ", j, (int)get_key_position_raw(j));
+                printf("[%2d]:%5d, ", j, (int)get_key_position_raw(j));
                 if((n - 6) % 8 == 0)
                     printf("\n");
             }
@@ -573,12 +611,10 @@ int spi_pru_loader (void)
         ticks++;
     }
 
-    return 0;
 
     /* Disable PRU and close memory mapping*/
     prussdrv_pru_disable(PRU_NUM);
     prussdrv_exit ();
-    munmap(ddrMem, 0x0FFFFFFF);
     close(mem_fd);
 
     return(0);
