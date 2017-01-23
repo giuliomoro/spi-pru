@@ -20,6 +20,8 @@
 
 #define GPIO0 0x44E07000
 #define GPIO1 0x4804C000
+#define GPIO2 0x481AC000
+#define GPIO3 0x481AE000
 #define GPIO_CLEARDATAOUT 0x190
 #define GPIO_SETDATAOUT 0x194
 
@@ -38,7 +40,29 @@
 // mosi: spi0_d1 P9_18
 // clk: spi0_sclk P9_22
 
+#define DO_SPI
+
 #define reg_spi_addr r29
+#define reg_start_scan r26
+#define reg_device r25 
+#define reg_num_devices r24
+#define reg_scans_since_last_start_scan r23
+#define reg_ticks r22
+#define reg_transmission_length r21
+#define reg_output r20
+#define reg_log r19
+#define reg_isvoid r18
+#define reg_outofrange r17
+
+#define reg_transmitted_words r5
+#define reg_curr_word r6
+
+#define TICKS_PER_START_SCAN 5
+#define START_SCAN_POSITION 0x100
+#define CYCLES_PER_TICK (200000000/1000)
+
+
+
 
 #define CONST_PRUCFG          C4
 #define CONST_PRUDRAM        C24
@@ -154,19 +178,9 @@ DELAY_LOOP:
     QBNE DELAY_LOOP, r27, 0
 .endm
 
-#define reg_transmitted_words r5
-#define reg_curr_word r6
-#define DO_SPI
-
 .macro BUS_MODE_MASTER_TRANSMITTER
 .mparam slaveDevice, buffer, transmitLength
-    /* Set RW* line low for transmit */
-    CLEAR_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
-    /* Set relevant CS/ line(s) low */
-    DELAY 1000
-    CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
-    /* Short delay, ~2us, to let slave device prepare */
-    DELAY 1000
+    PREPARE_TRANSMIT
     MOV reg_transmitted_words, 0 // reg_transmitted_words counts how many words we transmitted
     // empty the register, so that words shorter than 32bits find it empty
     MOV reg_curr_word, 0
@@ -177,7 +191,6 @@ WRITE_BUFFER_LOOP:
     SPICH0_TX reg_curr_word
 #endif
     // before waiting, we preload the next word (if any)
-    //0x0048
     QBGE WRITE_BUFFER_LOOP_PRELOAD_DONE, transmitLength, reg_transmitted_words
     ADD reg_transmitted_words, reg_transmitted_words, SPICH0_WL_BYTES
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
@@ -188,8 +201,7 @@ WRITE_BUFFER_LOOP:
 #endif
     QBLT WRITE_BUFFER_LOOP, transmitLength, reg_transmitted_words
     
-    /* Set relevant CS/ line high */
-    SET_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+    FINISH_TRANSACTION
     DELAY 100
 .endm
 
@@ -198,10 +210,10 @@ WRITE_BUFFER_LOOP:
     /* Set RW* line high for receive */
     SET_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
     /* Set relevant CS/ line(s) low */
-    DELAY 1000
+    DELAY 1
     CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
     /* Short delay, ~2us, to let slave device prepare */
-    DELAY 1000
+    DELAY 200
     MOV reg_transmitted_words, 0 // reg_transmitted_words counts how many words we transmitted
     // empty the register, so that words shorter than 32bits find it empty
     MOV reg_curr_word, 0
@@ -209,7 +221,7 @@ WRITE_BUFFER_LOOP:
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
 WRITE_BUFFER_LOOP:
 #ifdef DO_SPI
-    MOV r28, 0
+    MOV r28, 0 // we are actually receiving only, so we send out zeros.
     SPICH0_TX r28
 #endif
     // before waiting, we preload the next word (if any)
@@ -226,6 +238,7 @@ WRITE_BUFFER_LOOP:
 #endif
     QBNE CHECK_DYNAMIC_LENGTH_DONE, reg_transmitted_words, dynamicLengthLocation
     // if we are using dynamic length, then here we have just received it,
+    QBEQ ABORT, reg_curr_word, 0xFF // skip if slave is inactive
     // so replace existing length with it after:
     // a) extend it to a multiple of 4 and adding + 4 for CRC,
     // that is add 7 ...
@@ -237,9 +250,21 @@ WRITE_BUFFER_LOOP:
     MIN transmitLength, reg_curr_word, transmitLength
 CHECK_DYNAMIC_LENGTH_DONE:
     QBLT WRITE_BUFFER_LOOP, transmitLength, reg_transmitted_words
-    
-    /* Set relevant CS/ line high */
-    SET_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+    QBA RECEIVE_DONE
+ABORT:
+    ADD reg_isvoid, reg_isvoid, 1
+    SET_GPIO GPIO2, 1 << 2
+    CLEAR_GPIO GPIO2, 1 << 2
+    FINISH_TRANSACTION
+    QBA RECEIVE_VALIDATION_DONE
+RECEIVE_DONE:
+    FINISH_TRANSACTION
+    MOV r27, 0
+    LBBO r27, buffer, 12, 2
+    SBBO r27, reg_log, 12, 4
+    QBGT RECEIVE_VALIDATION_DONE, r27, 255
+    ADD reg_outofrange, reg_outofrange, 1
+RECEIVE_VALIDATION_DONE:
     DELAY 100
 .endm
 
@@ -249,26 +274,178 @@ CHECK_DYNAMIC_LENGTH_DONE:
     SBCO r27, CONST_PRUDRAM, 0, 4
 .endm
 
+.macro GET_CYCLE_COUNTER
+.mparam out
+    MOV r27, 0x22000      // PRU0 control register offset
+    LBBO out, r27, 0x000C, 4
+.endm
+
+.macro CLEAR_CYCLE_COUNTER
+    MOV r27, 0x22000      // PRU0 control register offset
+    MOV r28, 0
+    SBBO r28, r27, 0x000C, 4
+.endm
+
+.macro ENABLE_CYCLE_COUNTER
+    MOV r28, 0x22000      // PRU0 control register offset
+    // Load content of the control register into r27
+    LBBO r27, r28, 0, 4
+    // Enable cycle counter
+    OR r27, r27, 1 << 3
+    // Store the new control register value
+    SBBO r27, r28, 0, 4
+.endm
+
+.macro PREPARE_TRANSMIT
+    /* Set RW* line low for transmit */
+    CLEAR_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
+    /* Set relevant CS/ line(s) low */
+    DELAY 1
+    CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+    /* Short delay, ~2us, to let slave device prepare */
+    DELAY 300
+.endm
+
+// This is the same for TRANSMITTER or RECEIVER
+.macro FINISH_TRANSACTION
+    /* Set relevant CS/ line(s) high */
+    SET_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+.endm
+
+.macro WAIT_FOR_TICK
+WAIT_FOR_TICK_LOOP:
+    GET_CYCLE_COUNTER r27
+    MOV r28, CYCLES_PER_TICK
+    QBGE WAIT_FOR_TICK_LOOP, r27, r28
+    CLEAR_CYCLE_COUNTER
+.endm
+
+.macro SPICH0_TX_BLOCK
+.mparam input, output
+    SPICH0_TX input
+    SPICH0_WAIT_FOR_FINISH
+    SPICH0_RX output
+.endm
+
+.macro START_SCAN
+    // set the appropriate command in the buffer
+    // TODO: do this only once at the beginning
+    #define kBusCommandStartScan 0x81
+    MOV r27, 0
+    MOV r28, 0
+    SBBO r27, reg_start_scan, 0, 8
+    MOV r27, kBusCommandStartScan
+    SBBO r27, reg_start_scan, 0, 1
+
+    // store the timestamp in memory
+    SBBO reg_ticks, reg_start_scan, 1, 4
+    MOV reg_transmission_length, 5 // length
+
+    // we tried to unroll the loop here to make it faster
+    // and so we avoid to go back and forth from memory
+    // in practice it is not faster, which means the preload works nicely :)
+    /*
+    PREPARE_TRANSMIT
+    MOV r28, kBusCommandStartScan
+    SPICH0_TX_BLOCK r28.b0, r27
+    SPICH0_TX_BLOCK reg_ticks.b0, r27
+    SPICH0_TX_BLOCK reg_ticks.b1, r27
+    SPICH0_TX_BLOCK reg_ticks.b2, r27
+    SPICH0_TX_BLOCK reg_ticks.b3, r27
+    FINISH_TRANSACTION
+    */
+
+    BUS_MODE_MASTER_TRANSMITTER reg_device, reg_start_scan, reg_transmission_length
+.endm
+
+.macro BUS_MASTER_GATHER_SCAN_RESULTS
+    MOV reg_transmission_length, 255
+    MOV reg_output, 4
+    BUS_MODE_MASTER_RECEIVER reg_device, reg_output, reg_transmission_length, 1
+.endm
+
+.macro MASTER_MODE
+// every millisecond scan slaves
+// keep internal count of ticks
+// every so often hand this over to ARM
+// signal ARM of buffer ready
+// CRC check ? ??
+    // initialize reg_start_scan with a pointer to where the start_scan command is stored
+    MOV reg_start_scan, START_SCAN_POSITION
+    ENABLE_CYCLE_COUNTER
+    CLEAR_CYCLE_COUNTER
+    MOV r0, 0
+    MOV reg_scans_since_last_start_scan, 0
+    MOV reg_ticks, 0
+    MOV reg_isvoid, 0
+    MOV reg_outofrange, 0
+    MOV reg_log, 0x200
+    MOV r10, 0
+    // send a command to the devices to start scanning
+    // TODO: iterate through devices
+    START_SCAN
+    DELAY 400 // wait for devices to process START_SCAN
+MASTER_LOOP:
+    // debug GPIO flashing
+    SET_GPIO GPIO2, 1 << 3
+    CLEAR_GPIO GPIO2, 1 << 3
+
+    // ask devices to return their data
+    BUS_MASTER_GATHER_SCAN_RESULTS
+
+    // Check whether we have done enough scans since the last time we issued a start_scan
+    QBGT MASTER_LOOP_END, reg_scans_since_last_start_scan, TICKS_PER_START_SCAN
+    // if we did, then issue start_scan again
+    DELAY 400 // but first wait for devices to be ready to receive
+    START_SCAN
+    // debug GPIO flashing
+    // and reset the counter
+    MOV reg_scans_since_last_start_scan, 0
+MASTER_LOOP_END:
+    ADD reg_scans_since_last_start_scan, reg_scans_since_last_start_scan, 1
+    // store logging in memory
+    
+    MOV r27, reg_ticks
+    MOV r28, reg_isvoid
+    SBBO r27, reg_log, 0, 8
+    SBBO reg_outofrange, reg_log, 8, 4
+
+    // wait for 1ms to expire
+    WAIT_FOR_TICK
+    ADD reg_ticks, reg_ticks, 1
+    QBA MASTER_LOOP
+.endm
+
 START:
+    // debug GPIO flashing
+    SET_GPIO GPIO2, 1 << 3
+    DELAY 1000
+    CLEAR_GPIO GPIO2, 1 << 3
+    DELAY 1000
+    SET_GPIO GPIO2, 1 << 3
+    DELAY 1000
+    CLEAR_GPIO GPIO2, 1 << 3
+
     //start scan
     //while sleep 1
     //  gatherScanResults
     //
     
-     // Find out which PRU we are running on
-     // This affects the following offsets
-     MOV  r0, 0x24000      // PRU1 control register offset
-     //LBBO r2, reg_comm_addr, COMM_PRU_NUMBER, 4
-     MOV r2, PRU_NUMBER
-     QBEQ PRU_NUMBER_CHECK_DONE, r2, 1
-     MOV  r0, 0x22000      // PRU0 control register offset
+    // Find out which PRU we are running on
+    // This affects the following offsets
+    MOV  r0, 0x24000      // PRU1 control register offset
+    //LBBO r2, reg_comm_addr, COMM_PRU_NUMBER, 4
+    MOV r2, PRU_NUMBER
+    QBEQ PRU_NUMBER_CHECK_DONE, r2, 1
+    MOV  r0, 0x22000      // PRU0 control register offset
+
 PRU_NUMBER_CHECK_DONE:
 
-     // Set up c24 and c25 offsets with CTBIR register
-     // Thus C24 points to start of PRU0 RAM
-     OR  r3, r0, 0x20      // CTBIR0
-     MOV r2, 0
-     SBBO r2, r3, 0, 4
+    // Set up c24 and c25 offsets with CTBIR register
+    // Thus C24 points to start of PRU0 RAM
+    OR  r3, r0, 0x20      // CTBIR0
+    MOV r2, 0
+    SBBO r2, r3, 0, 4
 
     // Enable OCP master port
     LBCO      r0, C4, 4, 4
@@ -322,6 +499,9 @@ SPI_WAIT_RESET:
     MOV r2, 0x01
     SBBO r2, reg_spi_addr, SPI_CH0CTRL, 4
 
+    MOV reg_device, 0
+    MOV reg_num_devices, 1
+    //MASTER_MODE
 WAIT_FOR_ARM:
     // the loader will have placed the number of words
     // to transmit into CONST_PRUDRAM
@@ -352,10 +532,10 @@ DO_RECEIVE:
     // mask out bit flags (upper 16 bits)
     LSL r1, r1, 16
     LSR r1, r1, 16
-    BUS_MODE_MASTER_RECEIVER 0, r2, r1, r3
+    BUS_MODE_MASTER_RECEIVER reg_device, r2, r1, r3
     QBA COMMUNICATION_DONE
 TRANSMIT: 
-    BUS_MODE_MASTER_TRANSMITTER 0, r2, r1
+    BUS_MODE_MASTER_TRANSMITTER reg_device, r2, r1
 COMMUNICATION_DONE:
     // either way, signal ARM that the communication is over
     SIGNAL_ARM_OVER
