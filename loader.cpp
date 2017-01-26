@@ -329,6 +329,8 @@ int spi_pru_loader (void)
 	testGpio.open(66, 1);
 	Gpio testGpio2;
 	testGpio2.open(67, 1);
+	Gpio testGpio3;
+	testGpio3.open(69, 1);
 
     if(prepareGPIO(1)){
 	}
@@ -424,11 +426,11 @@ int spi_pru_loader (void)
             printf("%10d---------\nlength: %d\n%#x %#x %#x\n-------------\n", j, length, 
               t32[0], t32[1], t32[2]);
         }
+        while(t32[0] != 0 && !gShouldStop){
+            printf("waiting for previous tasks to complete\n");
+        }
     }
 
-    while(t32[0] != 0 && !gShouldStop){
-        printf("waiting for previous tasks to complete\n");
-    }
     printf("done\n");
     if(0){ // query connected devices
         data[0] = kBusCommandStatus;
@@ -453,6 +455,91 @@ int spi_pru_loader (void)
     uint8_t* startScan = 0x100 + (uint8_t*)pruMem;
     uint32_t* log = (uint32_t*)( 0x200 + (uint8_t*)pruMem);
 	memset(log, 0, 100);
+	memset((void*)t32, 0, 0x204);
+
+    uint8_t* pruBuffers[] = {(uint8_t*)t32, ((uint8_t*)t32) + 0x100};
+    uint32_t* pruCommon = (uint32_t*)(((uint8_t*)t32) + 0x200);
+    int lastPruBuffer = *pruCommon;
+    uint8_t s[] = {4, 0, 20, 0};
+    printf("crc: %x\n", crc32_bitwise(s, 1));
+    //gShouldStop = 1;
+	while(!gShouldStop){
+        int pruBuffer = *pruCommon;
+        if(lastPruBuffer == pruBuffer && 1){
+            rt_task_sleep(10000);
+            continue;
+        }
+        lastPruBuffer = pruBuffer;
+        if(pruBuffer == 1){
+            testGpio2.set();
+        } else {
+            testGpio2.clear();
+        }
+
+        data = pruBuffers[pruBuffer];
+        rt_printf("b: %d, ", pruBuffer);
+        uint32_t timestamp = 0;
+
+		int receivedLength = data[0];
+        
+		int moreData = data[1];
+		int frameType = data[2];
+		int zero = data[3];
+
+        uint32_t paddedLength = (receivedLength + 3) & ~3;
+        uint32_t computedCrc = crc32_bitwise((void*)data, paddedLength >> 2);
+		uint32_t receivedCrc;
+		memcpy((void*)&receivedCrc, (void*)&data[paddedLength], 4);
+        if(receivedCrc != computedCrc){
+            rt_printf("wrong Crc: %#x %#x\n ", computedCrc, receivedCrc);
+            continue;
+        }
+
+        if(frameType == 19)
+        {
+            timestamp = *(uint32_t*)&data[4];
+            if(timestamp > 32000){
+                static int count = 0;
+                count++;
+                if(count == 5){
+                    //gShouldStop = 1;
+                }
+                testGpio3.set();
+                rt_task_sleep(10000);
+                testGpio3.clear();
+            }
+        }
+        if(frameType == 20){
+            rt_printf("empty\n");
+            continue;
+        }
+      
+		rt_printf("l: %3d, f: %3d, t: %6d -- data: ", (uint32_t)receivedLength, frameType, timestamp);
+        if(frameType == 19){
+            for(int n = 0; n < 6; ++n){
+                char s;
+                if(n == 0 || n == 12 || n == 24)
+                    s = 'C';
+                else if(n == 2 || n == 14)
+                    s = 'D';
+                else if(n == 4 || n == 16)
+                    s = 'E';
+                else if(n == 5 || n == 17)
+                    s = 'F';
+                else if(n == 7 || n == 19)
+                    s = 'G';
+                else if(n == 9 || n == 21)
+                    s = 'A';
+                else if(n == 11 || n == 23)
+                    s = 'B';
+                else
+                    s = '#';
+                s = '\0';
+                rt_printf("%c%5d  ", s, get_key_position_raw(n));
+            }
+        }
+        rt_printf("\n");
+	}
     while(!gShouldStop && 0){
         uint8_t command = startScan[0];
         uint32_t time;
@@ -482,7 +569,8 @@ int spi_pru_loader (void)
         testGpio.clear();
         usleep(900);
 
-		if(ticks % 2 == 0 || 1){
+		// startScan request
+		if(ticks % 1 == 0 || 0){
 			//Ask devices to start scan
 			if(verbose)
 				printf("Ask for a new scan\n");
@@ -513,35 +601,59 @@ int spi_pru_loader (void)
         if(verbose)
             printf("---------\nlength: %d\n%#x %#x %#x\n-------------\n", length, 
               t32[0], t32[1], t32[2]);
-		testGpio2.set();
         while(t32[0] != 0 && !gShouldStop);
-		testGpio2.clear();
 
         if(verbose)
             printf("done---------\nlength: %d\n%#x %#x %#x\n-------------\n", length, 
               t32[0], t32[1], t32[2]);
         if(ticks % 100 == 1)
         ;
-        // static int off = 0;
 		int kFrameTypeAnalog = 19;
-        //if(get_key_position(0) <= 0)
 		
+		uint32_t receivedCrc;
+		uint16_t receivedLength = data[0];
+        //TODO: cap received length to requested length
+		uint16_t alignedReceivedLength = (receivedLength + 3) & 0xFFFC;
+		uint32_t computedCrc = crc32_bitwise((void*)data, alignedReceivedLength >> 2);
+        computedCrc = 0x12345678;
+		memcpy(&receivedCrc, (uint8_t*)&data[alignedReceivedLength], 4);
+		int frameType = data[2];
+
 		//static int count = 0;
-		//if(count++ % 100 == 0)
-		//if(count++ % 100 == 0 || get_key_position_raw(0) < 100)
 		int print = 0;
         static int count = 0;
         static int succesful = 0;
         static int outofrange = 0;
         static int corrupted = 0;
         static int voids = 0;
-        if(count % 100 == 0) {
-            //print = 1;
-            //printf("%4d\n", get_key_position_raw(0));
+
+        if(count % 100 == 0 || 1) {
+			printf("%3d, %d: ", (uint32_t)receivedLength, frameType);
+            for(int n = 0; n < 20; ++n){
+				char s;
+				if(n == 0 || n == 12 || n == 24)
+					s = 'C';
+				else if(n == 2 || n == 14)
+					s = 'D';
+				else if(n == 4 || n == 16)
+					s = 'E';
+				else if(n == 5 || n == 17)
+					s = 'F';
+				else if(n == 7 || n == 19)
+					s = 'G';
+				else if(n == 9 || n == 21)
+					s = 'A';
+				else if(n == 11 || n == 23)
+					s = 'B';
+				else
+					s = '#';
+				s = '\0';
+                printf("%c%5d  ", s, get_key_position_raw(n));
+			}
+            printf("\n");
         }
-        if(count % 1000 == 0)
+        if(count % 1000 == 0 && 0)
         {
-			print = 1;
             printf("succesful: %d(%.3f%%), outofrange: %d(%.3f), corrupted: %d(%.3f%%), void: %d(%.3f%%), value: %d\n",
                 succesful, succesful/(float)count * 100,
                 outofrange, outofrange/(float)count * 100,
@@ -551,24 +663,17 @@ int spi_pru_loader (void)
             );
         }
         count++;
-		//printf("%4d\n", get_key_position_raw(0));
-		uint32_t receivedCrc;
-		uint16_t receivedLength = data[0];
-        //TODO: cap received length to requested length
-		uint16_t alignedReceivedLength = (receivedLength + 3) & 0xFFFC;
-		uint32_t computedCrc = crc32_bitwise((void*)data, alignedReceivedLength >> 2);
-		memcpy(&receivedCrc, (uint8_t*)&data[alignedReceivedLength], 4);
+
 		if(receivedCrc != computedCrc){
 			if(receivedLength != 255){
                 ++corrupted;
-				print = 1;
-			    testGpio.set();
+				print = 0;
             }
             else {
                 int isvoid = 1;
                 for(int n = 0; n < receivedLength - 4; ++n){
                     if(data[n] != 0xff){
-                        print = 1;
+                        //print = 1;
                         isvoid = 0;
                         break;
                     }
@@ -577,9 +682,8 @@ int spi_pru_loader (void)
                     ++voids;
                 else {
                     ++corrupted;
-					print = 1;
+					//print = 1;
 				}
-			    testGpio.set();
             }
 		} else {
 			if(get_key_position_raw(0) < 100)
@@ -594,7 +698,7 @@ int spi_pru_loader (void)
             printf("Results(%d):\n", count);
             printf("Received length: %d (%d)\n", receivedLength, alignedReceivedLength);  
             printf("More data: %d\n", (uint32_t)data[1]);
-            printf("Type: %#x %s\n", (uint32_t)data[2], data[2] == kFrameTypeAnalog ? "correct" : "unknown");
+            printf("Type: %#x %s\n", (uint32_t)frameType, frameType == kFrameTypeAnalog ? "correct" : "unknown");
             printf("Zero: %#x\n", (uint32_t)data[3]);
             printf("Timestamp: rec %10d, trans %10d\n", *(uint32_t*)&data[4], ticks);
             // get_key_position();

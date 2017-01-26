@@ -29,7 +29,7 @@
 #define SPICH0_WL        8       // Word length
 #define SPICH0_WL_BYTES  (SPICH0_WL >> 3) // Word length in bytes
 #define SPICH0_CLK_MODE  0       // SPI mode
-#define SPICH0_CLK_DIV   3      // Clock divider (48MHz / 2^n)
+#define SPICH0_CLK_DIV   2      // Clock divider (48MHz / 2^n)
 #define SPICH0_DPE       1       // d0 = receive, d1 = transmit
 #define SPICH0_CS_GPIO      GPIO1
 #define SPICH0_CS_PIN    (1<<17) // GPIO1:17 = P9 pin 23
@@ -49,7 +49,7 @@
 #define reg_scans_since_last_start_scan r23
 #define reg_ticks r22
 #define reg_transmission_length r21
-#define reg_output r20
+#define reg_current_output_buffer r20
 #define reg_log r19
 #define reg_isvoid r18
 #define reg_outofrange r17
@@ -57,8 +57,8 @@
 #define reg_transmitted_words r5
 #define reg_curr_word r6
 
-#define TICKS_PER_START_SCAN 5
-#define START_SCAN_POSITION 0x100
+#define TICKS_PER_START_SCAN 2
+#define START_SCAN_POSITION 0x220
 #define CYCLES_PER_TICK (200000000/1000)
 
 
@@ -210,10 +210,10 @@ WRITE_BUFFER_LOOP:
     /* Set RW* line high for receive */
     SET_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
     /* Set relevant CS/ line(s) low */
-    DELAY 1
+    DELAY 1000
     CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
     /* Short delay, ~2us, to let slave device prepare */
-    DELAY 200
+    DELAY 1000
     MOV reg_transmitted_words, 0 // reg_transmitted_words counts how many words we transmitted
     // empty the register, so that words shorter than 32bits find it empty
     MOV reg_curr_word, 0
@@ -225,7 +225,6 @@ WRITE_BUFFER_LOOP:
     SPICH0_TX r28
 #endif
     // before waiting, we preload the next word (if any)
-    //0x0048
     QBGE WRITE_BUFFER_LOOP_PRELOAD_DONE, transmitLength, reg_transmitted_words
     ADD reg_transmitted_words, reg_transmitted_words, SPICH0_WL_BYTES
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
@@ -248,22 +247,25 @@ WRITE_BUFFER_LOOP:
     CLR reg_curr_word, 1 
     // b) and capping it anyhow with the requested transmitLength
     MIN transmitLength, reg_curr_word, transmitLength
+
+    QBNE CHECK_DYNAMIC_LENGTH_DONE, transmitLength, 8
+    // debug here
+
+
 CHECK_DYNAMIC_LENGTH_DONE:
     QBLT WRITE_BUFFER_LOOP, transmitLength, reg_transmitted_words
     QBA RECEIVE_DONE
 ABORT:
     ADD reg_isvoid, reg_isvoid, 1
-    SET_GPIO GPIO2, 1 << 2
-    CLEAR_GPIO GPIO2, 1 << 2
     FINISH_TRANSACTION
     QBA RECEIVE_VALIDATION_DONE
 RECEIVE_DONE:
     FINISH_TRANSACTION
-    MOV r27, 0
-    LBBO r27, buffer, 12, 2
-    SBBO r27, reg_log, 12, 4
-    QBGT RECEIVE_VALIDATION_DONE, r27, 255
-    ADD reg_outofrange, reg_outofrange, 1
+    //MOV r27, 0
+    //LBBO r27, buffer, 12, 2
+    //SBBO r27, reg_log, 12, 4
+    //QBGT RECEIVE_VALIDATION_DONE, r27, 255
+    //ADD reg_outofrange, reg_outofrange, 1
 RECEIVE_VALIDATION_DONE:
     DELAY 100
 .endm
@@ -308,6 +310,7 @@ RECEIVE_VALIDATION_DONE:
 
 // This is the same for TRANSMITTER or RECEIVER
 .macro FINISH_TRANSACTION
+    DELAY 100
     /* Set relevant CS/ line(s) high */
     SET_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
 .endm
@@ -358,10 +361,31 @@ WAIT_FOR_TICK_LOOP:
     BUS_MODE_MASTER_TRANSMITTER reg_device, reg_start_scan, reg_transmission_length
 .endm
 
+#define FIRST_BUFFER 0
+#define SECOND_BUFFER 0x100
+#define CURRENT_BUFFER_ADDRESS 0x200
+
 .macro BUS_MASTER_GATHER_SCAN_RESULTS
+
+    // switch buffers over 
+    MOV r27, SECOND_BUFFER
+    QBNE SELECT_SECOND_BUFFER, reg_current_output_buffer, r27
+SELECT_FIRST_BUFFER:
+    //SET_GPIO GPIO2, 1 << 2
+    MOV reg_current_output_buffer, FIRST_BUFFER
+    MOV r28, 1
+    QBA SELECT_BUFFER_DONE
+SELECT_SECOND_BUFFER:
+    //CLEAR_GPIO GPIO2, 1 << 2
+    MOV reg_current_output_buffer, SECOND_BUFFER
+    MOV r28, 0
+    QBA SELECT_BUFFER_DONE
+SELECT_BUFFER_DONE:
+    MOV r27, CURRENT_BUFFER_ADDRESS
+    SBBO r28, r27, 0, 4 // signal ARM so that it knows where to read from
+
     MOV reg_transmission_length, 255
-    MOV reg_output, 4
-    BUS_MODE_MASTER_RECEIVER reg_device, reg_output, reg_transmission_length, 1
+    BUS_MODE_MASTER_RECEIVER reg_device, reg_current_output_buffer, reg_transmission_length, 1
 .endm
 
 .macro MASTER_MODE
@@ -375,40 +399,35 @@ WAIT_FOR_TICK_LOOP:
     ENABLE_CYCLE_COUNTER
     CLEAR_CYCLE_COUNTER
     MOV r0, 0
-    MOV reg_scans_since_last_start_scan, 0
+    MOV reg_scans_since_last_start_scan, TICKS_PER_START_SCAN
     MOV reg_ticks, 0
     MOV reg_isvoid, 0
     MOV reg_outofrange, 0
-    MOV reg_log, 0x200
+    MOV reg_log, 0x300
     MOV r10, 0
     // send a command to the devices to start scanning
-    // TODO: iterate through devices
-    START_SCAN
-    DELAY 400 // wait for devices to process START_SCAN
-MASTER_LOOP:
-    // debug GPIO flashing
-    SET_GPIO GPIO2, 1 << 3
-    CLEAR_GPIO GPIO2, 1 << 3
 
+MASTER_LOOP:
+
+    // Check whether we have done enough scans since the last time we issued a start_scan
+    QBGT START_SCAN_DONE, reg_scans_since_last_start_scan, TICKS_PER_START_SCAN
+    // if we did, then issue start_scan again
+    START_SCAN
+
+    // and reset the counter
+    MOV reg_scans_since_last_start_scan, 0
+    DELAY 400 // wait for devices to be ready before continuing
+START_SCAN_DONE:
     // ask devices to return their data
     BUS_MASTER_GATHER_SCAN_RESULTS
 
-    // Check whether we have done enough scans since the last time we issued a start_scan
-    QBGT MASTER_LOOP_END, reg_scans_since_last_start_scan, TICKS_PER_START_SCAN
-    // if we did, then issue start_scan again
-    DELAY 400 // but first wait for devices to be ready to receive
-    START_SCAN
-    // debug GPIO flashing
-    // and reset the counter
-    MOV reg_scans_since_last_start_scan, 0
-MASTER_LOOP_END:
     ADD reg_scans_since_last_start_scan, reg_scans_since_last_start_scan, 1
+
     // store logging in memory
-    
-    MOV r27, reg_ticks
-    MOV r28, reg_isvoid
-    SBBO r27, reg_log, 0, 8
-    SBBO reg_outofrange, reg_log, 8, 4
+    //MOV r27, reg_ticks
+    //MOV r28, reg_isvoid
+    //SBBO r27, reg_log, 0, 8
+    //SBBO reg_outofrange, reg_log, 8, 4
 
     // wait for 1ms to expire
     WAIT_FOR_TICK
@@ -417,15 +436,6 @@ MASTER_LOOP_END:
 .endm
 
 START:
-    // debug GPIO flashing
-    SET_GPIO GPIO2, 1 << 3
-    DELAY 1000
-    CLEAR_GPIO GPIO2, 1 << 3
-    DELAY 1000
-    SET_GPIO GPIO2, 1 << 3
-    DELAY 1000
-    CLEAR_GPIO GPIO2, 1 << 3
-
     //start scan
     //while sleep 1
     //  gatherScanResults
@@ -501,7 +511,7 @@ SPI_WAIT_RESET:
 
     MOV reg_device, 0
     MOV reg_num_devices, 1
-    //MASTER_MODE
+    MASTER_MODE
 WAIT_FOR_ARM:
     // the loader will have placed the number of words
     // to transmit into CONST_PRUDRAM
