@@ -21,6 +21,10 @@
 #include <inttypes.h>
 #include </root/Bela/include/Gpio.h>
 
+#include <native/task.h>
+#include <native/timer.h>
+#include <native/intr.h>
+#include <rtdk.h>
 
 const uint32_t Polynomial = 0x04C11DB7;
 //const uint32_t Polynomial = 0xEDB88320;
@@ -316,6 +320,11 @@ float get_key_position(unsigned int n){
 
 int spi_pru_loader (void)
 {
+    int ret = rt_task_shadow (NULL, "spi-pru", 40, T_FPU);
+    if(ret != 0){
+        fprintf(stderr, "error: %s\n", strerror);
+    }
+	rt_print_auto_init(1);
 	Gpio testGpio;
 	testGpio.open(66, 1);
 	Gpio testGpio2;
@@ -323,7 +332,6 @@ int spi_pru_loader (void)
 
     if(prepareGPIO(1)){
 	}
-	unsigned int ret;
     tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
 
     /* Initialize the PRU */
@@ -612,6 +620,7 @@ int spi_pru_loader (void)
     }
 
 
+    rt_task_sleep(1000000);
     /* Disable PRU and close memory mapping*/
     prussdrv_pru_disable(PRU_NUM);
     prussdrv_exit ();
