@@ -124,16 +124,12 @@
 
 // Bring CS line low to write to SPI
 .macro SPICH0_CS_ASSERT
-     MOV r27, SPICH0_CS_PIN
-     MOV r28, SPICH0_CS_GPIO + GPIO_CLEARDATAOUT
-     SBBO r27, r28, 0, 4
+     CLEAR_GPIO SPICH0_CS_GPIO SPICH0_CS_PIN
 .endm
 
 // Bring CS line high at end of SPICH0 transaction
 .macro SPICH0_CS_UNASSERT
-     MOV r27, SPICH0_CS_PIN
-     MOV r28, SPICH0_CS_GPIO + GPIO_SETDATAOUT
-     SBBO r27, r28, 0, 4
+     SET_GPIO SPICH0_CS_GPIO SPICH0_CS_PIN
 .endm
 
 // Write to SPICH0 TX register
