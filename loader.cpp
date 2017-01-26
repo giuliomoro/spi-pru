@@ -20,6 +20,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include </root/Bela/include/Gpio.h>
+#include <stdlib.h>
 
 #include <native/task.h>
 #include <native/timer.h>
@@ -385,7 +386,6 @@ int spi_pru_loader (void)
           t32[0], t32[1], t32[2]);
     }
     /* Execute example on PRU */
-    printf("\tINFO: Executing example.\r\n");
     if(prussdrv_exec_program (PRU_NUM, "/root/spi-pru/spi-pru.bin")){
         fprintf(stderr, "Failed loading program\n");
     }
@@ -450,8 +450,6 @@ int spi_pru_loader (void)
         printf("done---------\nlength: %#x\n%#x %#x %#x\n-------------\n", length, 
           t32[0], t32[1], t32[2]);
     }
-    uint32_t ticks = 0;
-    int verbose = 0;
     uint8_t* startScan = 0x100 + (uint8_t*)pruMem;
     uint32_t* log = (uint32_t*)( 0x200 + (uint8_t*)pruMem);
 	memset(log, 0, 100);
@@ -460,9 +458,14 @@ int spi_pru_loader (void)
     uint8_t* pruBuffers[] = {(uint8_t*)t32, ((uint8_t*)t32) + 0x100};
     uint32_t* pruCommon = (uint32_t*)(((uint8_t*)t32) + 0x200);
     int lastPruBuffer = *pruCommon;
-    uint8_t s[] = {4, 0, 20, 0};
-    printf("crc: %x\n", crc32_bitwise(s, 1));
     //gShouldStop = 1;
+    int successful = 0;
+    int corrupted = 0;
+    int empty = 0;
+    int outofrange = 0;
+    int outoforder = 0;
+    int ticks = 0;
+    int verbose = 1;
 	while(!gShouldStop){
         int pruBuffer = *pruCommon;
         if(lastPruBuffer == pruBuffer && 1){
@@ -470,14 +473,8 @@ int spi_pru_loader (void)
             continue;
         }
         lastPruBuffer = pruBuffer;
-        if(pruBuffer == 1){
-            testGpio2.set();
-        } else {
-            testGpio2.clear();
-        }
-
         data = pruBuffers[pruBuffer];
-        rt_printf("b: %d, ", pruBuffer);
+        if(verbose) rt_printf("b: %d, ", pruBuffer);
         uint32_t timestamp = 0;
 
 		int receivedLength = data[0];
@@ -490,81 +487,74 @@ int spi_pru_loader (void)
         uint32_t computedCrc = crc32_bitwise((void*)data, paddedLength >> 2);
 		uint32_t receivedCrc;
 		memcpy((void*)&receivedCrc, (void*)&data[paddedLength], 4);
+        verbose = 1;
         if(receivedCrc != computedCrc){
-            rt_printf("wrong Crc: %#x %#x\n ", computedCrc, receivedCrc);
-            continue;
-        }
-
-        if(frameType == 19)
-        {
-            timestamp = *(uint32_t*)&data[4];
-            if(timestamp > 32000){
-                static int count = 0;
-                count++;
-                if(count == 5){
-                    //gShouldStop = 1;
+            ++corrupted;
+            if(verbose) rt_printf("wrong Crc: %#x %#x\n ", computedCrc, receivedCrc);
+        } else {
+            if(frameType == 19)
+            {
+                static int pastTimestamp = 0;
+                timestamp = *(uint32_t*)&data[4];
+                if(abs(pastTimestamp - timestamp) > 1000){ // out of order timestamp
+                    outoforder++;
+                    verbose = 1;
+                    if(outoforder == 1){
+                        //gShouldStop = 1;
+                    }
+                    testGpio3.set();
+                    rt_task_sleep(1000);
+                    testGpio3.clear();
+                } else if (get_key_position_raw(0) < 500) {
+                    ++outofrange;
+                } else {
+                    ++successful;
                 }
-                testGpio3.set();
-                rt_task_sleep(10000);
-                testGpio3.clear();
+                pastTimestamp = timestamp;
+            }
+            if(frameType == 20){
+                ++empty;
+                if(verbose) rt_printf("empty");
+            } else {
+                if(verbose) rt_printf("l: %3d, f: %3d, t: %#10x -- data: ", (uint32_t)receivedLength, frameType, timestamp);
+                if(frameType == 19){
+                    for(int n = 0; n < 6; ++n){
+                        char s;
+                        if(n == 0 || n == 12 || n == 24)
+                            s = 'C';
+                        else if(n == 2 || n == 14)
+                            s = 'D';
+                        else if(n == 4 || n == 16)
+                            s = 'E';
+                        else if(n == 5 || n == 17)
+                            s = 'F';
+                        else if(n == 7 || n == 19)
+                            s = 'G';
+                        else if(n == 9 || n == 21)
+                            s = 'A';
+                        else if(n == 11 || n == 23)
+                            s = 'B';
+                        else
+                            s = '#';
+                        s = '\0';
+                        if (verbose) rt_printf("%c%5d  ", s, get_key_position_raw(n));
+                    }
+                }
             }
         }
-        if(frameType == 20){
-            rt_printf("empty\n");
-            continue;
+        if (verbose) rt_printf("\n");
+        ++ticks;
+        if(ticks % 1000 == 0){
+            if (verbose) rt_printf("------------------------------------successful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), empty: %d(%.3f%%), outoforder: %d(%.3f%%), \n",
+                successful, successful/(float)ticks * 100,
+                outofrange, outofrange/(float)ticks * 100,
+                corrupted, corrupted/(float)ticks * 100,
+                empty, empty/(float)ticks * 100, 
+                outoforder, outoforder/(float)ticks * 100
+            );
         }
-      
-		rt_printf("l: %3d, f: %3d, t: %6d -- data: ", (uint32_t)receivedLength, frameType, timestamp);
-        if(frameType == 19){
-            for(int n = 0; n < 6; ++n){
-                char s;
-                if(n == 0 || n == 12 || n == 24)
-                    s = 'C';
-                else if(n == 2 || n == 14)
-                    s = 'D';
-                else if(n == 4 || n == 16)
-                    s = 'E';
-                else if(n == 5 || n == 17)
-                    s = 'F';
-                else if(n == 7 || n == 19)
-                    s = 'G';
-                else if(n == 9 || n == 21)
-                    s = 'A';
-                else if(n == 11 || n == 23)
-                    s = 'B';
-                else
-                    s = '#';
-                s = '\0';
-                rt_printf("%c%5d  ", s, get_key_position_raw(n));
-            }
-        }
-        rt_printf("\n");
 	}
-    while(!gShouldStop && 0){
-        uint8_t command = startScan[0];
-        uint32_t time;
-		uint32_t ticks = log[0];
-		uint32_t voids = log[1];
-		uint32_t outofrange = log[2];
-		uint32_t value = log[3];
-		uint32_t succesful = ticks - voids - outofrange;
-		uint32_t count = ticks;
-		uint32_t corrupted = 0;
-		
-       	memcpy(&time, (uint8_t*)&startScan[1], 4);
-        printf("command: %u, time: %d\n", (uint32_t)command, time); 
-        printf("succesful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), void: %d(%.3f%%), value: %d, %d, %d %d\n",
-            succesful, succesful/(float)count * 100,
-            outofrange, outofrange/(float)count * 100,
-            corrupted, corrupted/(float)count* 100,
-            voids, voids/(float)count* 100,
-            get_key_position_raw(0), 
-            get_key_position_raw(1), 
-			value&0xFFFF,
-			(value >> 16) & 0xFFFF
-        );
-        usleep(1000000);
-    }
+
     while(!gShouldStop){
         testGpio.clear();
         usleep(900);
@@ -622,7 +612,7 @@ int spi_pru_loader (void)
 		//static int count = 0;
 		int print = 0;
         static int count = 0;
-        static int succesful = 0;
+        static int successful = 0;
         static int outofrange = 0;
         static int corrupted = 0;
         static int voids = 0;
@@ -654,8 +644,8 @@ int spi_pru_loader (void)
         }
         if(count % 1000 == 0 && 0)
         {
-            printf("succesful: %d(%.3f%%), outofrange: %d(%.3f), corrupted: %d(%.3f%%), void: %d(%.3f%%), value: %d\n",
-                succesful, succesful/(float)count * 100,
+            printf("successful: %d(%.3f%%), outofrange: %d(%.3f), corrupted: %d(%.3f%%), void: %d(%.3f%%), value: %d\n",
+                successful, successful/(float)count * 100,
                 outofrange, outofrange/(float)count * 100,
                 corrupted, corrupted/(float)count* 100,
                 voids, voids/(float)count* 100,
@@ -689,7 +679,7 @@ int spi_pru_loader (void)
 			if(get_key_position_raw(0) < 100)
 				++outofrange;
 			else
-				++succesful;
+				++successful;
 		}
         if(print)
 		{
@@ -729,7 +719,15 @@ int spi_pru_loader (void)
     prussdrv_pru_disable(PRU_NUM);
     prussdrv_exit ();
     close(mem_fd);
-
+    usleep(100000);
+    printf("------------------------------------successful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), empty: %d(%.3f%%), outoforder: %d(%.3f%%), total: %d\n",
+       successful, successful/(float)ticks * 100,
+       outofrange, outofrange/(float)ticks * 100,
+       corrupted, corrupted/(float)ticks * 100,
+       empty, empty/(float)ticks * 100, 
+       outoforder, outoforder/(float)ticks * 100,
+       ticks
+    );
     return(0);
 }
 
