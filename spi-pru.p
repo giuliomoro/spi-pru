@@ -57,7 +57,7 @@
 #define reg_transmitted_words r5
 #define reg_curr_word r6
 
-#define TICKS_PER_START_SCAN 2
+#define TICKS_PER_START_SCAN 5
 #define START_SCAN_POSITION 0x220
 #define CYCLES_PER_TICK (200000000/1000)
 
@@ -342,7 +342,21 @@ WAIT_FOR_TICK_LOOP:
 
     // store the timestamp in memory
     SBBO reg_ticks, reg_start_scan, 1, 4
-    MOV reg_transmission_length, 5 // length
+
+    // add simple error check for the timestamp:
+    // append a 32-bit aligned 32-bit word
+    // obtained adding together the timestamp
+    // and 0x55555555
+    MOV r27, 0
+    MOV r28, 0x55555555
+    ADD r28, reg_ticks, r28
+    SBBO reg_ticks, reg_start_scan, 1, 4
+    // ensure 32-bit alignment
+    SBBO r27, reg_start_scan, 5, 3
+    // add the error check
+    SBBO r28, reg_start_scan, 8, 4
+
+    MOV reg_transmission_length, 12 // length
 
     // we tried to unroll the loop here to make it faster
     // and so we avoid to go back and forth from memory
