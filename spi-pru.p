@@ -31,10 +31,38 @@
 #define SPICH0_CLK_MODE  0       // SPI mode
 #define SPICH0_CLK_DIV   2      // Clock divider (48MHz / 2^n)
 #define SPICH0_DPE       1       // d0 = receive, d1 = transmit
-#define SPICH0_CS_GPIO      GPIO1
+#define SPICH0_CS_GPIO   GPIO2
 #define SPICH0_CS_PIN    (1<<17) // GPIO1:17 = P9 pin 23
 #define SPICH0_RW_GPIO   GPIO1
 #define SPICH0_RW_PIN    (1<<16) // GPIO1:16 = P9 pin 15
+
+#define USING_PRU_1 //set this according to the PRU we use 
+
+#ifdef USING_PRU_1
+#define BITBANG_SPI
+#endif
+
+#define PRU0_CONTROL_REGISTER_OFFSET 0x22000
+#define PRU1_CONTROL_REGISTER_OFFSET 0x24000
+
+#ifdef USING_PRU_0
+#define PRU_CONTROL_REGISTER_OFFSET PRU0_CONTROL_REGISTER_OFFSET
+#else 
+#define PRU_CONTROL_REGISTER_OFFSET PRU1_CONTROL_REGISTER_OFFSET
+#endif 
+
+#ifdef BITBANG_SPI
+// these are the pins of the PRU''s own GPIOs that we want to use 
+// for bitbang SPI. Only available on PRU1.
+#define SCK_PIN 0
+#define MISO_PIN 1
+#define MOSI_PIN 2
+#endif
+
+#define CS_PIN_DEVICE_0 2 // P8_07
+#define CS_PIN_DEVICE_1 3 // P8_08
+#define CS_PIN_DEVICE_2 5 // P8_09
+#define DEVICE_BROADCAST_NUMBER 0xFF
 
 // miso: spi0_d0 P9_21
 // mosi: spi0_d1 P9_18
@@ -53,6 +81,7 @@
 #define reg_log r19
 #define reg_isvoid r18
 #define reg_outofrange r17
+#define reg_current_device_cs r16
 
 #define reg_transmitted_words r5
 #define reg_curr_word r6
@@ -122,6 +151,23 @@
      SBBO r27, r28, 0, 4
 .endm
 
+// Bring CS line(s) low to write to SPI
+.macro SPICH0_CS_ASSERT_CURRENT_DEVICE
+    /* Set relevant CS/ line(s) low */
+    CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+    CLEAR_GPIO SPICH0_CS_GPIO, reg_current_device_cs
+    //NOT r27, reg_current_device_cs
+    //AND r30, r27, r30
+.endm
+
+// Bring CS line(s) high at end of SPICH0 transaction
+.macro SPICH0_CS_UNASSERT_CURRENT_DEVICE
+    /* Set relevant CS/ line(s) high */
+    CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+    SET_GPIO SPICH0_CS_GPIO, reg_current_device_cs
+    //OR r30, reg_current_device_cs, r30
+.endm
+
 // Bring CS line low to write to SPI
 .macro SPICH0_CS_ASSERT
      CLEAR_GPIO SPICH0_CS_GPIO SPICH0_CS_PIN
@@ -174,6 +220,27 @@ DELAY_LOOP:
     QBNE DELAY_LOOP, r27, 0
 .endm
 
+.macro SET_CURRENT_DEVICE_CS
+    QBNE DEVICE_ONE, reg_device, 0
+    MOV reg_current_device_cs, 1 << CS_PIN_DEVICE_0
+    QBA SET_CURRENT_DEVICE_DONE
+DEVICE_ONE:
+    QBNE DEVICE_TWO, reg_device, 1
+    MOV reg_current_device_cs, 1 << CS_PIN_DEVICE_1
+    QBA SET_CURRENT_DEVICE_DONE
+DEVICE_TWO:
+    QBNE DEVICE_BROADCAST, reg_device, 1
+    MOV reg_current_device_cs, 1 << CS_PIN_DEVICE_2
+    QBA SET_CURRENT_DEVICE_DONE
+DEVICE_BROADCAST:
+    QBNE DEVICE_NONE, reg_device, DEVICE_BROADCAST_NUMBER
+    MOV reg_current_device_cs, 1 << CS_PIN_DEVICE_0 | 1 << CS_PIN_DEVICE_1 | 1 << CS_PIN_DEVICE_2 
+DEVICE_NONE:
+    // disable
+    MOV reg_current_device_cs, 0 
+SET_CURRENT_DEVICE_DONE:
+.endm
+
 .macro BUS_MODE_MASTER_TRANSMITTER
 .mparam slaveDevice, buffer, transmitLength
     PREPARE_TRANSMIT
@@ -203,11 +270,7 @@ WRITE_BUFFER_LOOP:
 
 .macro BUS_MODE_MASTER_RECEIVER
 .mparam slaveDevice, buffer, transmitLength, dynamicLengthLocation
-    /* Set RW* line high for receive */
-    SET_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
-    /* Set relevant CS/ line(s) low */
-    DELAY 1000
-    CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+    PREPARE_RECEIVE
     /* Short delay, ~2us, to let slave device prepare */
     DELAY 1000
     MOV reg_transmitted_words, 0 // reg_transmitted_words counts how many words we transmitted
@@ -274,18 +337,18 @@ RECEIVE_VALIDATION_DONE:
 
 .macro GET_CYCLE_COUNTER
 .mparam out
-    MOV r27, 0x22000      // PRU0 control register offset
+    MOV r27, PRU_CONTROL_REGISTER_OFFSET
     LBBO out, r27, 0x000C, 4
 .endm
 
 .macro CLEAR_CYCLE_COUNTER
-    MOV r27, 0x22000      // PRU0 control register offset
+    MOV r27, PRU_CONTROL_REGISTER_OFFSET
     MOV r28, 0
     SBBO r28, r27, 0x000C, 4
 .endm
 
 .macro ENABLE_CYCLE_COUNTER
-    MOV r28, 0x22000      // PRU0 control register offset
+    MOV r28, PRU_CONTROL_REGISTER_OFFSET
     // Load content of the control register into r27
     LBBO r27, r28, 0, 4
     // Enable cycle counter
@@ -294,12 +357,17 @@ RECEIVE_VALIDATION_DONE:
     SBBO r27, r28, 0, 4
 .endm
 
+.macro PREPARE_RECEIVE
+    /* Set RW* line high for receive */
+    SET_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
+    /* Set relevant CS/ line(s) low */
+    SPICH0_CS_ASSERT_CURRENT_DEVICE
+.endm
+
 .macro PREPARE_TRANSMIT
     /* Set RW* line low for transmit */
     CLEAR_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
-    /* Set relevant CS/ line(s) low */
-    DELAY 1
-    CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+    SPICH0_CS_ASSERT_CURRENT_DEVICE
     /* Short delay, ~2us, to let slave device prepare */
     DELAY 300
 .endm
@@ -307,8 +375,7 @@ RECEIVE_VALIDATION_DONE:
 // This is the same for TRANSMITTER or RECEIVER
 .macro FINISH_TRANSACTION
     DELAY 100
-    /* Set relevant CS/ line(s) high */
-    SET_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
+    SPICH0_CS_UNASSERT_CURRENT_DEVICE
 .endm
 
 .macro WAIT_FOR_TICK
@@ -395,6 +462,7 @@ SELECT_BUFFER_DONE:
     SBBO r28, r27, 0, 4 // signal ARM so that it knows where to read from
 
     MOV reg_transmission_length, 255
+    SET_CURRENT_DEVICE_CS
     BUS_MODE_MASTER_RECEIVER reg_device, reg_current_output_buffer, reg_transmission_length, 1
 .endm
 
@@ -451,16 +519,7 @@ START:
     //  gatherScanResults
     //
     
-    // Find out which PRU we are running on
-    // This affects the following offsets
-    MOV  r0, 0x24000      // PRU1 control register offset
-    //LBBO r2, reg_comm_addr, COMM_PRU_NUMBER, 4
-    MOV r2, PRU_NUMBER
-    QBEQ PRU_NUMBER_CHECK_DONE, r2, 1
-    MOV  r0, 0x22000      // PRU0 control register offset
-
-PRU_NUMBER_CHECK_DONE:
-
+    MOV r0, PRU_CONTROL_REGISTER_OFFSET
     // Set up c24 and c25 offsets with CTBIR register
     // Thus C24 points to start of PRU0 RAM
     OR  r3, r0, 0x20      // CTBIR0
