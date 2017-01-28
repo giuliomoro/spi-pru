@@ -84,7 +84,7 @@ short int digitalPins[NUM_DIGITALS] = {
   GPIO_NO_BIT_15,
 };
 
-#define PRU_NUM 	 0
+#define PRU_NUM 	 1
 #define ADDEND1	 	 0x98765400u
 #define ADDEND2		 0x12345678u
 #define ADDEND3		 0x10210210u
@@ -490,7 +490,7 @@ int spi_pru_loader (void)
         verbose = 1;
         if(receivedCrc != computedCrc){
             ++corrupted;
-            if(verbose) rt_printf("wrong Crc: %#x %#x\n ", computedCrc, receivedCrc);
+            if(verbose) rt_printf("l: %3d, wrong Crc:%#x %#x\n ", receivedLength, computedCrc, receivedCrc);
         } else {
             if(frameType == 19)
             {
@@ -516,9 +516,9 @@ int spi_pru_loader (void)
                 ++empty;
                 if(verbose) rt_printf("empty");
             } else {
-                if(verbose) rt_printf("l: %3d, f: %3d, t: %#10x -- data: ", (uint32_t)receivedLength, frameType, timestamp);
+                if(verbose && 0) rt_printf("l: %3d, f: %3d, t: %#10x -- data: ", (uint32_t)receivedLength, frameType, timestamp);
                 if(frameType == 19){
-                    for(int n = 0; n < 6; ++n){
+                    for(int n = 0; n < 25; ++n){
                         char s;
                         if(n == 0 || n == 12 || n == 24)
                             s = 'C';
@@ -537,7 +537,7 @@ int spi_pru_loader (void)
                         else
                             s = '#';
                         s = '\0';
-                        if (verbose) rt_printf("%c%5d  ", s, get_key_position_raw(n));
+                        if (verbose) rt_printf("%c%4d  ", s, get_key_position_raw(n));
                     }
                 }
             }

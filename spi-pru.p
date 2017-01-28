@@ -62,6 +62,9 @@
 #define CS_PIN_DEVICE_0 2 // P8_07
 #define CS_PIN_DEVICE_1 3 // P8_08
 #define CS_PIN_DEVICE_2 5 // P8_09
+#define CS_PIN_DEVICE_ALL (1 << CS_PIN_DEVICE_0 |\
+                           1 << CS_PIN_DEVICE_1 |\
+                           1 << CS_PIN_DEVICE_2)
 #define DEVICE_BROADCAST_NUMBER 0xFF
 
 // miso: spi0_d0 P9_21
@@ -88,9 +91,8 @@
 
 #define TICKS_PER_START_SCAN 5
 #define START_SCAN_POSITION 0x220
-#define CYCLES_PER_TICK (200000000/1000)
-
-
+#define TICKS_PER_SECOND 1000
+#define CYCLES_PER_TICK (200000000/TICKS_PER_SECOND)
 
 
 #define CONST_PRUCFG          C4
@@ -168,6 +170,12 @@
     //OR r30, reg_current_device_cs, r30
 .endm
 
+// shorthand which avoids to reset all CS lines 
+// without having to change reg_device
+.macro SPICH0_CS_UNASSERT_ALL
+    SET_GPIO SPICH0_CS_GPIO, CS_PIN_DEVICE_ALL
+.endm
+
 // Bring CS line low to write to SPI
 .macro SPICH0_CS_ASSERT
      CLEAR_GPIO SPICH0_CS_GPIO SPICH0_CS_PIN
@@ -234,7 +242,7 @@ DEVICE_TWO:
     QBA SET_CURRENT_DEVICE_DONE
 DEVICE_BROADCAST:
     QBNE DEVICE_NONE, reg_device, DEVICE_BROADCAST_NUMBER
-    MOV reg_current_device_cs, 1 << CS_PIN_DEVICE_0 | 1 << CS_PIN_DEVICE_1 | 1 << CS_PIN_DEVICE_2 
+    MOV reg_current_device_cs, CS_PIN_DEVICE_ALL
 DEVICE_NONE:
     // disable
     MOV reg_current_device_cs, 0 
@@ -358,6 +366,8 @@ RECEIVE_VALIDATION_DONE:
 .endm
 
 .macro PREPARE_RECEIVE
+    /* make sure no CS line has been left high */
+    SPICH0_CS_UNASSERT_ALL
     /* Set RW* line high for receive */
     SET_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
     /* Set relevant CS/ line(s) low */
@@ -365,6 +375,8 @@ RECEIVE_VALIDATION_DONE:
 .endm
 
 .macro PREPARE_TRANSMIT
+    /* make sure no CS line has been left high */
+    SPICH0_CS_UNASSERT_ALL
     /* Set RW* line low for transmit */
     CLEAR_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
     SPICH0_CS_ASSERT_CURRENT_DEVICE
@@ -473,6 +485,7 @@ SELECT_BUFFER_DONE:
 // signal ARM of buffer ready
 // CRC check ? ??
     // initialize reg_start_scan with a pointer to where the start_scan command is stored
+    SPICH0_CS_UNASSERT_ALL
     MOV reg_start_scan, START_SCAN_POSITION
     ENABLE_CYCLE_COUNTER
     CLEAR_CYCLE_COUNTER
@@ -579,7 +592,7 @@ SPI_WAIT_RESET:
     SBBO r2, reg_spi_addr, SPI_CH0CTRL, 4
 
     MOV reg_device, 0
-    MOV reg_num_devices, 1
+    MOV reg_num_devices, 2
     MASTER_MODE
 WAIT_FOR_ARM:
     // the loader will have placed the number of words
