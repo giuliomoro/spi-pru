@@ -31,8 +31,6 @@
 #define SPICH0_CLK_MODE  0       // SPI mode
 #define SPICH0_CLK_DIV   2      // Clock divider (48MHz / 2^n)
 #define SPICH0_DPE       1       // d0 = receive, d1 = transmit
-#define SPICH0_CS_GPIO   GPIO2
-#define SPICH0_CS_PIN    (1<<17) // GPIO1:17 = P9 pin 23
 #define SPICH0_RW_GPIO   GPIO1
 #define SPICH0_RW_PIN    (1<<16) // GPIO1:16 = P9 pin 15
 
@@ -59,12 +57,15 @@
 #define MOSI_PIN 2
 #endif
 
+#define SPICH0_CS_GPIO   GPIO2
 #define CS_PIN_DEVICE_0 2 // P8_07
 #define CS_PIN_DEVICE_1 3 // P8_08
 #define CS_PIN_DEVICE_2 5 // P8_09
+#define CS_PIN_DEVICE_3 4 // P8_10
 #define CS_PIN_DEVICE_ALL (1 << CS_PIN_DEVICE_0 |\
                            1 << CS_PIN_DEVICE_1 |\
-                           1 << CS_PIN_DEVICE_2)
+                           1 << CS_PIN_DEVICE_2 |\
+                           1 << CS_PIN_DEVICE_3)
 #define DEVICE_BROADCAST_NUMBER 0xFF
 
 // miso: spi0_d0 P9_21
@@ -80,14 +81,19 @@
 #define reg_scans_since_last_start_scan r23
 #define reg_ticks r22
 #define reg_transmission_length r21
-#define reg_current_output_buffer r20
+#define reg_current_output_buffer r20 // a pointer to a location in memory where to write scan results
 #define reg_log r19
 #define reg_isvoid r18
 #define reg_outofrange r17
 #define reg_current_device_cs r16
+// reg_devices_in_buffer has a bit set for each device which actually replied with a frame during a scan.
+#define reg_devices_in_buffer r15
 
 #define reg_transmitted_words r5
 #define reg_curr_word r6
+#define reg_flags r7
+
+#define FLAGS_CURRENT_BUFFER
 
 #define TICKS_PER_START_SCAN 5
 #define START_SCAN_POSITION 0x220
@@ -156,18 +162,13 @@
 // Bring CS line(s) low to write to SPI
 .macro SPICH0_CS_ASSERT_CURRENT_DEVICE
     /* Set relevant CS/ line(s) low */
-    CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
     CLEAR_GPIO SPICH0_CS_GPIO, reg_current_device_cs
-    //NOT r27, reg_current_device_cs
-    //AND r30, r27, r30
 .endm
 
 // Bring CS line(s) high at end of SPICH0 transaction
 .macro SPICH0_CS_UNASSERT_CURRENT_DEVICE
     /* Set relevant CS/ line(s) high */
-    CLEAR_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
     SET_GPIO SPICH0_CS_GPIO, reg_current_device_cs
-    //OR r30, reg_current_device_cs, r30
 .endm
 
 // shorthand which avoids to reset all CS lines 
@@ -237,12 +238,13 @@ DEVICE_ONE:
     MOV reg_current_device_cs, 1 << CS_PIN_DEVICE_1
     QBA SET_CURRENT_DEVICE_DONE
 DEVICE_TWO:
-    QBNE DEVICE_BROADCAST, reg_device, 1
+    QBNE DEVICE_BROADCAST, reg_device, 2
     MOV reg_current_device_cs, 1 << CS_PIN_DEVICE_2
     QBA SET_CURRENT_DEVICE_DONE
 DEVICE_BROADCAST:
     QBNE DEVICE_NONE, reg_device, DEVICE_BROADCAST_NUMBER
     MOV reg_current_device_cs, CS_PIN_DEVICE_ALL
+    QBA SET_CURRENT_DEVICE_DONE
 DEVICE_NONE:
     // disable
     MOV reg_current_device_cs, 0 
@@ -290,49 +292,37 @@ WRITE_BUFFER_LOOP:
 #ifdef DO_SPI
     MOV r28, 0 // we are actually receiving only, so we send out zeros.
     SPICH0_TX r28
-#endif
-    // before waiting, we preload the next word (if any)
-    QBGE WRITE_BUFFER_LOOP_PRELOAD_DONE, transmitLength, reg_transmitted_words
     ADD reg_transmitted_words, reg_transmitted_words, SPICH0_WL_BYTES
-    LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
-    WRITE_BUFFER_LOOP_PRELOAD_DONE:
-#ifdef DO_SPI
     SPICH0_WAIT_FOR_FINISH
     SPICH0_RX reg_curr_word
     SUB r27, reg_transmitted_words, SPICH0_WL_BYTES
     SBBO reg_curr_word, buffer, r27, SPICH0_WL_BYTES
 #endif
+
+QBNE CHECK_DYNAMIC_LENGTH, reg_transmitted_words, 1
+    // this is the first word
+    // if the first word was 0xFF, then the slave is inactive
+    // and we skip the rest of the transmission.
+    QBEQ RECEIVE_DONE, reg_curr_word, 0xFF
+
+CHECK_DYNAMIC_LENGTH:
     QBNE CHECK_DYNAMIC_LENGTH_DONE, reg_transmitted_words, dynamicLengthLocation
     // if we are using dynamic length, then here we have just received it,
-    QBEQ ABORT, reg_curr_word, 0xFF // skip if slave is inactive
-    // so replace existing length with it after:
+APPLY_DYNAMIC_LENGTH:
+    // so we use this:
     // a) extend it to a multiple of 4 and adding + 4 for CRC,
-    // that is add 7 ...
+    // that is: add 7 ...
     ADD reg_curr_word, reg_curr_word, 7
     // ... and clear  lower two bits
     CLR reg_curr_word, 0
     CLR reg_curr_word, 1 
-    // b) and capping it anyhow with the requested transmitLength
+    // b) cap it to the requested transmitLength
     MIN transmitLength, reg_curr_word, transmitLength
-
-    QBNE CHECK_DYNAMIC_LENGTH_DONE, transmitLength, 8
-    // debug here
-
-
 CHECK_DYNAMIC_LENGTH_DONE:
     QBLT WRITE_BUFFER_LOOP, transmitLength, reg_transmitted_words
     QBA RECEIVE_DONE
-ABORT:
-    ADD reg_isvoid, reg_isvoid, 1
-    FINISH_TRANSACTION
-    QBA RECEIVE_VALIDATION_DONE
 RECEIVE_DONE:
     FINISH_TRANSACTION
-    //MOV r27, 0
-    //LBBO r27, buffer, 12, 2
-    //SBBO r27, reg_log, 12, 4
-    //QBGT RECEIVE_VALIDATION_DONE, r27, 255
-    //ADD reg_outofrange, reg_outofrange, 1
 RECEIVE_VALIDATION_DONE:
     DELAY 100
 .endm
@@ -406,6 +396,9 @@ WAIT_FOR_TICK_LOOP:
 .endm
 
 .macro START_SCAN
+    MOV reg_device, DEVICE_BROADCAST_NUMBER
+    SET_CURRENT_DEVICE_CS
+
     // set the appropriate command in the buffer
     // TODO: do this only once at the beginning
     #define kBusCommandStartScan 0x81
@@ -451,31 +444,60 @@ WAIT_FOR_TICK_LOOP:
 .endm
 
 #define FIRST_BUFFER 0
-#define SECOND_BUFFER 0x100
-#define CURRENT_BUFFER_ADDRESS 0x200
+#define SECOND_BUFFER 0x400
+#define CURRENT_BUFFER_PTR 0x800
+#define DEVICES_IN_BUFFER_PTR 0x804
+#define MAX_SCAN_LENGTH 0xff
+#define SCAN_SIZE_IN_BUFFER (MAX_SCAN_LENGTH + 1)
 
 .macro BUS_MASTER_GATHER_SCAN_RESULTS
 
     // switch buffers over 
     MOV r27, SECOND_BUFFER
-    QBNE SELECT_SECOND_BUFFER, reg_current_output_buffer, r27
+    QBBC SELECT_SECOND_BUFFER, reg_flags, FLAGS_CURRENT_BUFFER
 SELECT_FIRST_BUFFER:
-    //SET_GPIO GPIO2, 1 << 2
+    CLR reg_flags, FLAGS_CURRENT_BUFFER
     MOV reg_current_output_buffer, FIRST_BUFFER
     MOV r28, 1
     QBA SELECT_BUFFER_DONE
 SELECT_SECOND_BUFFER:
-    //CLEAR_GPIO GPIO2, 1 << 2
+    SET reg_flags, FLAGS_CURRENT_BUFFER
     MOV reg_current_output_buffer, SECOND_BUFFER
     MOV r28, 0
     QBA SELECT_BUFFER_DONE
 SELECT_BUFFER_DONE:
-    MOV r27, CURRENT_BUFFER_ADDRESS
-    SBBO r28, r27, 0, 4 // signal ARM so that it knows where to read from
+    // the current buffer is now stored in r28
+    MOV r27, CURRENT_BUFFER_PTR
+    // signal ARM so that it knows where to read from
+    SBBO r28, r27, 0, 4
 
-    MOV reg_transmission_length, 255
+    MOV reg_devices_in_buffer, 0
+    // iterate through all the devices
+    MOV reg_device, 0
+FOR_DEVICE:
+    MOV reg_transmission_length, MAX_SCAN_LENGTH
     SET_CURRENT_DEVICE_CS
     BUS_MODE_MASTER_RECEIVER reg_device, reg_current_output_buffer, reg_transmission_length, 1
+
+    // if the transmission was only 1-word long, it means
+    // that the device was inactive
+    QBEQ CHECK_DEVICE_ACTIVE_DONE, reg_transmitted_words, 1
+    // if the device was active, then set
+    // the corresponding bit in reg_devices_in_buffer
+    MOV r27, 1
+    LSL r27, r27, reg_device
+    OR reg_devices_in_buffer, reg_devices_in_buffer, r27
+
+CHECK_DEVICE_ACTIVE_DONE:
+    ADD reg_device, reg_device, 1
+    // update the output pointer
+    MOV r27, SCAN_SIZE_IN_BUFFER
+    ADD reg_current_output_buffer, reg_current_output_buffer, r27
+    QBGT FOR_DEVICE, reg_device, reg_num_devices
+RECEIVE_FROM_DEVICES_DONE:
+    MOV r27, DEVICES_IN_BUFFER_PTR
+    // store the binary pattern representing the devices in the bufer
+    SBBO reg_devices_in_buffer, r27, 0, 4
 .endm
 
 .macro MASTER_MODE
@@ -496,6 +518,7 @@ SELECT_BUFFER_DONE:
     MOV reg_outofrange, 0
     MOV reg_log, 0x300
     MOV r10, 0
+    MOV r28, 0
     // send a command to the devices to start scanning
 
 MASTER_LOOP:
@@ -527,10 +550,8 @@ START_SCAN_DONE:
 .endm
 
 START:
-    //start scan
-    //while sleep 1
-    //  gatherScanResults
-    //
+    MOV reg_flags, 0
+    SPICH0_CS_UNASSERT_ALL
     
     MOV r0, PRU_CONTROL_REGISTER_OFFSET
     // Set up c24 and c25 offsets with CTBIR register
@@ -583,16 +604,12 @@ SPI_WAIT_RESET:
     MOV r2, (3 << 27) | (SPICH0_DPE << 16) | (SPICH0_TRM << 12) | ((SPICH0_WL - 1) << 7) | (SPICH0_CLK_DIV << 2) | SPICH0_CLK_MODE
     SBBO r2, reg_spi_addr, SPI_CH0CONF, 4
 
-    // bring up the CS and RW lines
-    //SET_GPIO SPICH0_RW_GPIO, SPICH0_RW_PIN
-    SET_GPIO SPICH0_CS_GPIO, SPICH0_CS_PIN
-
     // Turn on SPI channels
     MOV r2, 0x01
     SBBO r2, reg_spi_addr, SPI_CH0CTRL, 4
 
     MOV reg_device, 0
-    MOV reg_num_devices, 2
+    MOV reg_num_devices, 4
     MASTER_MODE
 WAIT_FOR_ARM:
     // the loader will have placed the number of words

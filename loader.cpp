@@ -451,14 +451,14 @@ int spi_pru_loader (void)
           t32[0], t32[1], t32[2]);
     }
     uint8_t* startScan = 0x100 + (uint8_t*)pruMem;
-    uint32_t* log = (uint32_t*)( 0x200 + (uint8_t*)pruMem);
+    uint32_t* log = (uint32_t*)( 0x800 + (uint8_t*)pruMem);
 	memset(log, 0, 100);
-	memset((void*)t32, 0, 0x204);
+	memset((void*)t32, 0, 0x1000);
 
-    uint8_t* pruBuffers[] = {(uint8_t*)t32, ((uint8_t*)t32) + 0x100};
-    uint32_t* pruCommon = (uint32_t*)(((uint8_t*)t32) + 0x200);
+    uint8_t* pruBuffers[] = {(uint8_t*)t32, ((uint8_t*)t32) + 0x400};
+    uint32_t* pruCommon = (uint32_t*)(((uint8_t*)t32) + 0x800);
+	*pruCommon = 0; // initialize the area where common flags are written
     int lastPruBuffer = *pruCommon;
-    //gShouldStop = 1;
     int successful = 0;
     int corrupted = 0;
     int empty = 0;
@@ -468,21 +468,28 @@ int spi_pru_loader (void)
     int verbose = 1;
 	while(!gShouldStop){
         int pruBuffer = *pruCommon;
-        if(lastPruBuffer == pruBuffer && 1){
-            rt_task_sleep(10000);
+        if(lastPruBuffer == pruBuffer){
+            rt_task_sleep(100000);
             continue;
         }
+		if(pruBuffer != 0 && pruBuffer != 1){
+			printf("pruBuffer: %d\n", pruBuffer);
+			testGpio3.clear();
+			testGpio3.set();
+			continue;
+		}
         lastPruBuffer = pruBuffer;
         data = pruBuffers[pruBuffer];
         if(verbose) rt_printf("b: %d, ", pruBuffer);
         uint32_t timestamp = 0;
 
+		int devices = pruCommon[1];
+		int numDevices = __builtin_popcount(devices);
+		rt_printf("D: %1u %1u %1u %1u,", !!(devices & (1)), !!(devices & (1 << 1)), !!(devices & (1 << 2)), !!(devices & (1 << 3)));
 		int receivedLength = data[0];
-        
 		int moreData = data[1];
 		int frameType = data[2];
 		int zero = data[3];
-
         uint32_t paddedLength = (receivedLength + 3) & ~3;
         uint32_t computedCrc = crc32_bitwise((void*)data, paddedLength >> 2);
 		uint32_t receivedCrc;
@@ -502,9 +509,7 @@ int spi_pru_loader (void)
                     if(outoforder == 1){
                         //gShouldStop = 1;
                     }
-                    testGpio3.set();
                     rt_task_sleep(1000);
-                    testGpio3.clear();
                 } else if (get_key_position_raw(0) < 500) {
                     ++outofrange;
                 } else {
@@ -518,27 +523,17 @@ int spi_pru_loader (void)
             } else {
                 if(verbose && 0) rt_printf("l: %3d, f: %3d, t: %#10x -- data: ", (uint32_t)receivedLength, frameType, timestamp);
                 if(frameType == 19){
-                    for(int n = 0; n < 25; ++n){
-                        char s;
-                        if(n == 0 || n == 12 || n == 24)
-                            s = 'C';
-                        else if(n == 2 || n == 14)
-                            s = 'D';
-                        else if(n == 4 || n == 16)
-                            s = 'E';
-                        else if(n == 5 || n == 17)
-                            s = 'F';
-                        else if(n == 7 || n == 19)
-                            s = 'G';
-                        else if(n == 9 || n == 21)
-                            s = 'A';
-                        else if(n == 11 || n == 23)
-                            s = 'B';
-                        else
-                            s = '#';
-                        s = '\0';
-                        if (verbose) rt_printf("%c%4d  ", s, get_key_position_raw(n));
-                    }
+					for(int p = 256 * 3; p >= 0; p -= 256){
+						if(!(devices & (1 << p/256))) continue;
+						if(verbose) rt_printf(" || ");
+						for(int n = p + 8; n < p + 58; n += 2){
+							int16_t raw;
+							memcpy(&raw, (void*)&(data[n]), 2);
+							float value = raw/4096.f;
+							value = value < 0 ? 0 : value;
+							if (verbose) rt_printf("%1.0f ", value * 10);
+						}
+					}
                 }
             }
         }
@@ -565,7 +560,7 @@ int spi_pru_loader (void)
 			if(verbose)
 				printf("Ask for a new scan\n");
 			length = 5;
-			memset((void*)data, 0, 300);
+			memset((void*)data, 0, 400);
 			data[0] = kBusCommandStartScan;
 			memcpy((uint8_t*)&data[1], &ticks, 4); /* Timestamp goes in bytes 1-4 */
 			t32[0] = length; 
