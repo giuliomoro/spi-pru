@@ -2,7 +2,7 @@ BELA_PATH?=/root/Bela
 OUTPUT=spi-pru
 
 all: spi-pru.bin $(OUTPUT)
-CFLAGS ?= -I/usr/xenomai/include -I $(BELA_PATH)/include
+CFLAGS ?= -I/usr/xenomai/include -I $(BELA_PATH)/include -g
 LDFLAGS ?= -L/usr/xenomai/lib
 LDLIBS = -lrt -lnative -lxenomai
 
@@ -14,5 +14,8 @@ $(OUTPUT): main.o GPIOcontrol.o loader.o
 
 %.o: %.cpp
 	g++ -std=c++11 -MMD -MP -MF"$(@:%.o=%.d)" "$<" -o "$@" -c $(CFLAGS)
+
+clean:
+	rm -r *.o *.bin
 
 .phony= all
