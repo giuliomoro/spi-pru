@@ -551,11 +551,9 @@ START_SCAN_DONE:
 
 START:
     MOV reg_flags, 0
-    SPICH0_CS_UNASSERT_ALL
-    
     MOV r0, PRU_CONTROL_REGISTER_OFFSET
     // Set up c24 and c25 offsets with CTBIR register
-    // Thus C24 points to start of PRU0 RAM
+    // Thus C24 points to start of PRU RAM
     OR  r3, r0, 0x20      // CTBIR0
     MOV r2, 0
     SBBO r2, r3, 0, 4
@@ -615,7 +613,6 @@ WAIT_FOR_ARM:
     // the loader will have placed the number of words
     // to transmit into CONST_PRUDRAM
     // load this in r1
-    //0x0032
     LBCO r1, CONST_PRUDRAM, 0, 4
     // if there is no word to send, wait again
     QBEQ WAIT_FOR_ARM, r1, 0
@@ -626,7 +623,6 @@ WAIT_FOR_ARM:
 
     // the length will have b31 clear if it is a transmit
     // and set if it is a receive 
-    //0x0036
     QBBC TRANSMIT, r1, 31
 RECEIVE:
     // the length will have b30 set if the provided length
