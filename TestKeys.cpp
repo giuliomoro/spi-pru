@@ -41,20 +41,35 @@ int main(){
 		unsigned int keyCount = 0;
 		unsigned int boardPosition = 0;
 		unsigned int firstKey = 0;
-		unsigned int lastKey = 23;
+		unsigned int lastKey = 24;
 		bt.setBoard(boardPosition, firstKey, lastKey);
-		keyCount += lastKey - firstKey;
+		keyCount += lastKey - firstKey + 1;
+
 		boardPosition = 1;
+		firstKey = 0;
+		lastKey = 23;
 		bt.setBoard(boardPosition, firstKey, lastKey);
-		keyCount += lastKey - firstKey;
+		keyCount += lastKey - firstKey + 1;
+
 		boardPosition = 2;
-		lastKey = 24;
+		firstKey = 9;
+		lastKey = 23;
 		bt.setBoard(boardPosition, firstKey, lastKey);
-		keyCount += lastKey - firstKey;
+		keyCount += lastKey - firstKey + 1;
+
+		int highestNote = lowestNote + keyCount - 1;
+
+		assert(bt.getNumBoards() == boardPosition + 1);
+		assert(keyCount == bt.getNumNotes());
+		assert(bt.getFirstActiveKey(boardPosition) == firstKey);
+		assert(bt.getLastActiveKey(boardPosition) == lastKey);
+		assert(bt.getLowestNote(bt.getNumBoards() - 1) == lowestNote);
+		assert(bt.getLowestNote(0) == 
+			lowestNote + keyCount - (bt.getLastActiveKey(0) - bt.getFirstActiveKey(0) + 1));
 
 		unsigned int maxKeysPerBoard = 25;
 		int n = lowestNote;
-		for(unsigned int b = 0; b < bt.getNumBoards(); ++b){
+		for(int b = bt.getNumBoards() - 1; b >=0;  --b){
 			for(unsigned int k = 0; k < maxKeysPerBoard; ++k){
 				int note = bt.getNote(b, k);
 				if(note >= 0){
@@ -63,7 +78,7 @@ int main(){
 				}
 			}
 		}
+		assert(n - 1 == highestNote);
 	}
-
 	return 0;
 }

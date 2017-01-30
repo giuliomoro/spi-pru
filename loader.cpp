@@ -240,8 +240,6 @@ int prepareGPIO(int include_led)
 }
 //*/
 
-static int mem_fd;
-
 static unsigned int *sharedMem_int;
 
 /* Query the presence and status of any connected slave devices (up to 3). Devices will respond
@@ -472,12 +470,6 @@ int spi_pru_loader (void)
             rt_task_sleep(100000);
             continue;
         }
-		if(pruBuffer != 0 && pruBuffer != 1){
-			printf("pruBuffer: %d\n", pruBuffer);
-			testGpio3.clear();
-			testGpio3.set();
-			continue;
-		}
         lastPruBuffer = pruBuffer;
         data = pruBuffers[pruBuffer];
         if(verbose) rt_printf("b: %d, ", pruBuffer);
@@ -713,7 +705,6 @@ int spi_pru_loader (void)
     /* Disable PRU and close memory mapping*/
     prussdrv_pru_disable(PRU_NUM);
     prussdrv_exit ();
-    close(mem_fd);
     usleep(100000);
     printf("------------------------------------successful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), empty: %d(%.3f%%), outoforder: %d(%.3f%%), total: %d\n",
        successful, successful/(float)ticks * 100,

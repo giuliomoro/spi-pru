@@ -311,7 +311,7 @@ public:
 		while(!that->shouldStop()){
 			int buffer = that->getBuffer();
 			if(lastBuffer == buffer){
-				rt_task_sleep(10000);
+				rt_task_sleep(1000);
 				continue;
 			}
 
@@ -440,8 +440,10 @@ public:
 			float* o = noteBuffer + currentNote;
 			int16_t* i = boardBuffer + firstActiveKey;
 			int16_t* iEnd = boardBuffer + lastActiveKey + 1;
+			int yes = 0;
 			for(; i < iEnd; ++i, ++o)
 			{
+				yes++;
 				float out = *i / 4096.f;
 				if(out < 0)
 					out = 0;
@@ -452,10 +454,10 @@ public:
 		// change the buffer in use.
 		that->_activeBuffer = !that->_activeBuffer;
 
-		printf("noteBuffer: %p (%d)|||", noteBuffer, that->_activeBuffer);
-		for(int n = bt->getLowestNote(); n <= bt->getHighestNote(); ++n)
-			printf("%1d ", (int)(that->getNoteValue(n)*10));
-		printf("\n");
+		//printf("noteBuffer: %p (%d)|||", noteBuffer, that->_activeBuffer);
+		//for(int n = bt->getLowestNote(); n <= bt->getHighestNote(); ++n)
+			//printf("%1d ", (int)(that->getNoteValue(n)*10));
+		//printf("\n");
 	}
 
 	float getNoteValue(int note)

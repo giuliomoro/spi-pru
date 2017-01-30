@@ -1,26 +1,32 @@
 BELA_PATH?=/root/Bela
-OUTPUT=spi-pru
+OUTPUT=DemoKeys
 
 all: spi-pru.bin $(OUTPUT)
 CC=g++
-CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include
+CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include -g
 LDFLAGS ?= -L/usr/xenomai/lib -L/root/Bela/lib/
 LDLIBS = -lrt -lnative -lxenomai -lprussdrv
-OBJS ?= main.o GPIOcontrol.o loader.o Keys.o
+OBJS ?= GPIOcontrol.o Keys.o
+DEMO_OBJS ?= DemoKeys.o 
 TEST_OBJS ?= TestKeys.o Keys.o GPIOcontrol.o
 TEST_BINS ?= TestKeys
+OLD_OBJS ?= main.o loader.o
+OLD = main
+
+$(OLD): $(OLD_OBJS) $(OBJS)
 
 spi-pru.bin: spi-pru.p
 	pasm -b spi-pru.p > /dev/null
 
 Keys.o: Keys.h
 TestKeys.o: Keys.h
+DemoKeys.o: Keys.h
 
-$(OUTPUT): $(OBJS) $(TEST_OBJS)
-	g++ $(OBJS) -o spi-pru $(LDLIBS) $(LDFLAGS)
+$(OUTPUT): $(OBJS) $(DEMO_OBJS)
+	$(CXX) $(DEMO_OBJS) $(OBJS) -o $(OUTPUT) $(LDLIBS) $(LDFLAGS)
 
 %.o: %.cpp
-	g++ -std=c++11 -MMD -MP -MF"$(@:%.o=%.d)" "$<" -o "$@" -c $(CFLAGS)
+	$(CXX) -std=c++11 -MMD -MP -MF"$(@:%.o=%.d)" "$<" -o "$@" -c $(CFLAGS)
 
 clean:
 	rm -rf *.o *.bin $(TEST_BINS) $(OUTPUT)

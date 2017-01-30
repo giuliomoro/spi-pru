@@ -29,7 +29,7 @@ int Board::getNote(unsigned int key)
 void BoardsTopology::setBoard(unsigned int boardPosition, unsigned int firstActiveKey, unsigned int lastActiveKey)
 {
 	unsigned int size = indexes.size();
-	unsigned int requiredSize = (boardPosition + 1) * numIndexesPerBoard;
+	unsigned int requiredSize = std::max(size, (boardPosition + 1) * numIndexesPerBoard);
 	if(size < requiredSize){
 		indexes.resize(requiredSize);
 	}
@@ -44,23 +44,35 @@ void BoardsTopology::updateBoards()
 	unsigned int numBoards = indexes.size() / numIndexesPerBoard;
 	deallocBoards();
 	boards.resize(numBoards);
-	int lowestNote = _lowestNote;
-	for(unsigned int n = 0; n < numBoards; ++n){
+	int startNote = _lowestNote;
+	for(int n = numBoards - 1; n >= 0; --n)
+	{
 		int firstActiveKey = indexes[n * numIndexesPerBoard];
 		int lastActiveKey = indexes[n * numIndexesPerBoard + 1];
 		Board* board = new Board;
-		board->setKeys(firstActiveKey, lastActiveKey, lowestNote);
+		board->setKeys(firstActiveKey, lastActiveKey, startNote);
 		boards[n] = board;
 		int numNotes = board->getNumActiveKeys();
-		lowestNote += numNotes;
+		startNote += numNotes;
 	}
+	_highestNote = startNote - 1;
 }
 
 void BoardsTopology::deallocBoards()
 {
-	for(auto board : boards)
+	for(auto &board : boards)
 	{
 		delete board;
 	}
+}
+
+unsigned int BoardsTopology::getNumNotes()
+{
+	int numNotes = 0;
+	for(auto &board: boards)
+	{
+		numNotes += board->getNumActiveKeys();
+	}
+	return numNotes;
 }
 
