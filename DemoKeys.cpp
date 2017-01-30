@@ -4,7 +4,7 @@
 #include <Gpio.h>
 
 
-int gShouldStop = 0;
+volatile int gShouldStop = 0;
 void catch_function(int signo){
 	gShouldStop = 1;
 }
@@ -29,7 +29,16 @@ int main()
 	if(ret < 0)
 		printf("Error while keys.start(): %d %s\n", ret, strerror(-ret));
 	
-	while(!gShouldStop);
+	while(!gShouldStop)
+	{
+		printf("value: %.3f %.3f %.3f %.3f\n", 
+			keys.getNoteValue(33),
+			keys.getNoteValue(41),
+			keys.getNoteValue(42),
+			keys.getNoteValue(43)
+		);
+		usleep(100000);	
+	}
 	keys.stop();
 	
 	return 0;

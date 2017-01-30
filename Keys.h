@@ -94,13 +94,11 @@ public:
 
 	int getLowestNote(unsigned int board)
 	{
-		Board* b = boards[board];
 		return boards[board]->getNote(getFirstActiveKey(board));
 	}
 
 	int getHighestNote(unsigned int board)
 	{
-		Board* b = boards[board];
 		return boards[board]->getNote(getLastActiveKey(board));
 	}
 private:
@@ -119,8 +117,6 @@ private:
 // Driver header file
 #include "prussdrv.h"
 #include "pruss_intc_mapping.h"
-#include <GPIOcontrol.h>
-#include <digital_gpio_mapping.h>
 #include <string.h>
 #include <native/task.h>
 #define PRU_NUM 1
@@ -165,6 +161,7 @@ public:
 	 */
 	int init(int numBoards)
 	{
+		testGpio.open(44, 1);
 		/* Initialize the PRU */
 		int ret;
 		if(!_pruInited)
@@ -223,7 +220,7 @@ public:
 	 * Starts the PRU loop in continuous scan mode:
 	 * it will periodically request frames from the connected devices.
 	 */
-	int start(int* shouldStop, void(*callback)(void*), void* arg)
+	int start(volatile int* shouldStop, void(*callback)(void*), void* arg)
 	{
 		if(shouldStop)
 			_externalShouldStop = shouldStop;
@@ -253,6 +250,7 @@ public:
 		if(ret){
 			return ret;
 		}
+		return 1;
 	}
 
 	/**
@@ -304,27 +302,23 @@ public:
 
 	static void loop(void* arg)
 	{
-		printf("in the loop\n");
 		PruSpiKeysDriver* that = (PruSpiKeysDriver*)arg;
-		uint32_t lastTicks = 0;
 		int lastBuffer = that->getBuffer();
 		while(!that->shouldStop()){
 			int buffer = that->getBuffer();
 			if(lastBuffer == buffer){
-				rt_task_sleep(10000);
+				rt_task_sleep(300000);
 				continue;
 			}
+			that->testGpio.set();
 
 			lastBuffer = buffer;
 			// TODO: validate CRC and set valid data appropriately
 			that->_validData = 0xff;
 
-			int16_t* keys = that->getKeysData(0);
-			//printf("%5d, %5d, %5d, ... ", keys[0], keys[1], keys[2]);
-
 			that->_callback(that->_callbackArg);
+			that->testGpio.clear();
 		}
-		printf("Loop completed\n");
 	}
 
 	void setTimeResolution(uint32_t milliseconds)
@@ -334,7 +328,7 @@ public:
 
 	uint32_t getTicks()
 	{
-		context->ticks;
+		return context->ticks;
 	}
 
 	int16_t* getKeysData(unsigned int board)
@@ -357,8 +351,8 @@ private:
 	bool _isLoopRunning;
 	RT_TASK _loopTask;
 	uint32_t _validData;
-	int _shouldStop;
-	int* _externalShouldStop;
+	volatile int _shouldStop;
+	volatile int* _externalShouldStop;
 	uint8_t* _pruMem;
 	void(*_callback)(void*);
 	void* _callbackArg;
@@ -366,6 +360,7 @@ private:
 	uint8_t* buffers[2];
 	const unsigned int _loopTaskPriority = 90;
 	const char* _loopTaskName = "SpiPruKeysDriverTask";
+	Gpio testGpio;
 };
 
 class Keys
@@ -384,8 +379,9 @@ public:
 		_driver.stop();
 	}
 
-	int start(BoardsTopology* bt, int* shouldStop = NULL)
+	int start(BoardsTopology* bt, volatile int* shouldStop = NULL)
 	{
+		testGpio.open(45, 1);
 		stop();
 		// TODO: wait for stop
 
@@ -419,6 +415,7 @@ public:
 	static void callback(void* obj)
 	{
 		Keys* that = (Keys*)obj;
+		that->testGpio.set();
 		PruSpiKeysDriver* driver = &that->_driver;
 		BoardsTopology* bt = that->_bt;
 		float* noteBuffer = that->_buffers[!that->_activeBuffer].data();
@@ -452,6 +449,8 @@ public:
 		// change the buffer in use.
 		that->_activeBuffer = !that->_activeBuffer;
 
+		that->testGpio.clear();
+        return;
 		printf("noteBuffer: %p (%d)|||", noteBuffer, that->_activeBuffer);
 		for(int n = bt->getLowestNote(); n <= bt->getHighestNote(); ++n)
 			printf("%1d ", (int)(that->getNoteValue(n)*10));
@@ -462,9 +461,10 @@ public:
 	{
 		int lowestNote = _bt->getLowestNote();
 		int highestNote = _bt->getHighestNote();
-		if(note < lowestNote || note > highestNote)
+		if(note < lowestNote || note > highestNote){
 			return -1;
-		else
+		}
+		else 
 			return _buffers[_activeBuffer][note - lowestNote];
 	}
 
@@ -477,6 +477,7 @@ private:
 	std::array<std::vector<float>, 2> _buffers;
 	bool _activeBuffer;
 	BoardsTopology* _bt;
+	Gpio testGpio;
 };
 
 // notes: 
@@ -488,3 +489,4 @@ private:
 // the driver should add waitForCurrentSpiTransactionToFinish() for synchronous transactions
 //
 #endif /* KEYS_H_INCLUDED */
+
