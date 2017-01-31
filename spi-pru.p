@@ -1,7 +1,6 @@
 .origin 0
 .entrypoint START
-
-#define PRU_NUMBER 0
+#define USING_PRU_1 //set this according to the PRU we use
 
 #define CLOCK_BASE  0x44E00000
 #define CLOCK_SPI0  0x4C
@@ -34,10 +33,8 @@
 #define SPICH0_RW_GPIO   GPIO1
 #define SPICH0_RW_PIN    (1<<16) // GPIO1:16 = P9 pin 15
 
-#define USING_PRU_1 //set this according to the PRU we use 
-
 #ifdef USING_PRU_1
-#define BITBANG_SPI
+//#define BITBANG_SPI
 #endif
 
 #define PRU0_CONTROL_REGISTER_OFFSET 0x22000
@@ -115,36 +112,6 @@
 // Address for the Constant table Programmable Pointer Register 1(CTPPR_1)
 #define CTPPR_1         0x2202C
 
-.macro  LD32
-.mparam dst,src
-    LBBO    dst,src,#0x00,4
-.endm
-
-.macro  LD16
-.mparam dst,src
-    LBBO    dst,src,#0x00,2
-.endm
-
-.macro  LD8
-.mparam dst,src
-    LBBO    dst,src,#0x00,1
-.endm
-
-.macro ST32
-.mparam src,dst
-    SBBO    src,dst,#0x00,4
-.endm
-
-.macro ST16
-.mparam src,dst
-    SBBO    src,dst,#0x00,2
-.endm
-
-.macro ST8
-.mparam src,dst
-    SBBO    src,dst,#0x00,1
-.endm
-
 .macro CLEAR_GPIO
 .mparam gpio_address, gpio_pins
      MOV r27, gpio_pins
@@ -163,18 +130,21 @@
 .macro SPICH0_CS_ASSERT_CURRENT_DEVICE
     /* Set relevant CS/ line(s) low */
     CLEAR_GPIO SPICH0_CS_GPIO, reg_current_device_cs
+    //clr r30, reg_current_device_cs
 .endm
 
 // Bring CS line(s) high at end of SPICH0 transaction
 .macro SPICH0_CS_UNASSERT_CURRENT_DEVICE
     /* Set relevant CS/ line(s) high */
     SET_GPIO SPICH0_CS_GPIO, reg_current_device_cs
+    //set r30, reg_current_device_cs
 .endm
 
 // shorthand which avoids to reset all CS lines 
 // without having to change reg_device
 .macro SPICH0_CS_UNASSERT_ALL
     SET_GPIO SPICH0_CS_GPIO, CS_PIN_DEVICE_ALL
+    //OR r30, reg_current_device_cs
 .endm
 
 // Bring CS line low to write to SPI
@@ -190,14 +160,19 @@
 // Write to SPICH0 TX register
 .macro SPICH0_TX
 .mparam data
+#ifdef BITBANG_SPI
+#else
      SBBO data, reg_spi_addr, SPI_CH0TX, 4
+#endif /* BITBANG_SPI */
 .endm
 
 // Wait for SPI to finish (uses RXS indicator)
 .macro SPICH0_WAIT_FOR_FINISH
+ #ifndef BITBANG_SPI
  LOOP:
      LBBO r27, reg_spi_addr, SPI_CH0STAT, 4
      QBBC LOOP, r27, 0
+#endif /* BITBANG_SPI */
 .endm
 
 // Read the RX word to clear; store output
@@ -563,19 +538,6 @@ START:
     CLR     r0, r0, 4   // Clear SYSCFG[STANDBY_INIT] to enable OCP master port
     SBCO      r0, C4, 4, 4
 
-    // Configure the programmable pointer register for PRU0 by setting c28_pointer[15:0]
-    // field to 0x0120.  This will make C28 point to 0x00012000 (PRU shared RAM).
-    MOV     r0, 0x00000120
-    MOV       r1, CTPPR_0
-    ST32      r0, r1
-
-    // Configure the programmable pointer register for PRU0 by setting c31_pointer[15:0]
-    // field to 0x0010.  This will make C31 point to 0x80001000 (DDR memory).
-    MOV     r0, 0x00100000
-    MOV       r1, CTPPR_1
-    ST32      r0, r1
-
-
     MOV reg_spi_addr, SPI_BASE
     // Init SPI clock
     MOV r2, 0x02
@@ -584,7 +546,6 @@ START:
     // Reset SPI and wait for finish
     MOV r2, 0x02
     SBBO r2, reg_spi_addr, SPI_SYSCONFIG, 4
-
 
 SPI_WAIT_RESET:
     LBBO r2, reg_spi_addr, SPI_SYSSTATUS, 4
