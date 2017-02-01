@@ -5,7 +5,7 @@
 #include <array>
 #include <inttypes.h>
 #include "Boards.h"
-#include "PruSpiKeyDriver.h"
+#include "PruSpiKeysDriver.h"
 
 #include <stdio.h>
 class Keys
