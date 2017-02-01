@@ -1,7 +1,7 @@
 BELA_PATH?=/root/Bela
 OUTPUT=DemoKeys
 
-all: spi-pru.bin $(OUTPUT)
+PRU_OBJS ?= spi-pru.bin
 CC=g++
 CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include -g
 LDFLAGS ?= -L/usr/xenomai/lib -L/root/Bela/lib/
@@ -12,6 +12,11 @@ TEST_OBJS ?= TestKeys.o Keys.o GPIOcontrol.o
 TEST_BINS ?= TestKeys
 OLD_OBJS ?= main.o loader.o
 OLD = main
+
+all: $(PRU_OBJS) $(OUTPUT)
+
+spi-pru: $(OLD) $(PRU_OBJS) # make sure you preserve the hard tab at the beginning of the next line
+	
 
 $(OLD): $(OLD_OBJS) $(OBJS)
 
@@ -36,4 +41,4 @@ TestKeys: $(TEST_OBJS)
 test: $(TEST_BINS)
 	./TestKeys
 
-.phony= all
+.phony: all spi-pru
