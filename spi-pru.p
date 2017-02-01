@@ -24,6 +24,11 @@
 #define GPIO_CLEARDATAOUT 0x190
 #define GPIO_SETDATAOUT 0x194
 
+#ifdef USING_PRU_1
+#define BITBANG_SPI
+#endif
+
+//#ifndef BITBANG_SPI
 #define SPICH0_TRM       0       // SPI transmit and receive
 #define SPICH0_WL        8       // Word length
 #define SPICH0_WL_BYTES  (SPICH0_WL >> 3) // Word length in bytes
@@ -32,10 +37,8 @@
 #define SPICH0_DPE       1       // d0 = receive, d1 = transmit
 #define SPICH0_RW_GPIO   GPIO1
 #define SPICH0_RW_PIN    (1<<16) // GPIO1:16 = P9 pin 15
+//#endif
 
-#ifdef USING_PRU_1
-//#define BITBANG_SPI
-#endif
 
 #define PRU0_CONTROL_REGISTER_OFFSET 0x22000
 #define PRU1_CONTROL_REGISTER_OFFSET 0x24000
@@ -45,13 +48,17 @@
 #else 
 #define PRU_CONTROL_REGISTER_OFFSET PRU1_CONTROL_REGISTER_OFFSET
 #endif 
+#define PRU_SPEED 200000000
 
 #ifdef BITBANG_SPI
 // these are the pins of the PRU''s own GPIOs that we want to use 
 // for bitbang SPI. Only available on PRU1.
-#define SCK_PIN 0
-#define MISO_PIN 1
-#define MOSI_PIN 2
+#define BITBANG_SPI_SCK r30.t0
+#define BITBANG_SPI_MOSI r30.t1
+#define BITBANG_SPI_MISO r31.t3
+#define SPI_CLOCK_FREQ 10000000
+#define SPI_CLOCK_PERIOD_CYCLES (PRU_SPEED/SPI_CLOCK_FREQ)
+#define SPI_CLOCK_HALF_PERIOD_CYCLES (SPI_CLOCK_PERIOD_CYCLES / 2)
 #endif
 
 #define SPICH0_CS_GPIO   GPIO2
@@ -95,7 +102,7 @@
 #define TICKS_PER_START_SCAN 5
 #define START_SCAN_POSITION 0x820
 #define TICKS_PER_SECOND 1000
-#define CYCLES_PER_TICK (200000000/TICKS_PER_SECOND)
+#define CYCLES_PER_TICK (PRU_SPEED/TICKS_PER_SECOND)
 
 
 #define CONST_PRUCFG          C4
@@ -157,22 +164,58 @@
      SET_GPIO SPICH0_CS_GPIO SPICH0_CS_PIN
 .endm
 
+#ifdef BITBANG_SPI
+.macro COPY_BIT
+.mparam output_bit, input_bit
+    QBBC CLEAR_OUTPUT_BIT, input_bit
+    SET output_bit
+    QBA DONE
+CLEAR_OUTPUT_BIT:
+    CLR output_bit
+    DONE:
+.endm
+
+.macro BITBANG_SPI_TX_RX
+.mparam data
+    SET r30.t2
+    // r28 is our pointer to the current bit in the input/output word
+    MOV r28, 0
+    // get the clock spinning
+BITBANG_LOOP:
+    // clock low ...
+    CLR BITBANG_SPI_SCK
+    // ...write the output bit ...
+    COPY_BIT BITBANG_SPI_MOSI, data.t7 // .t7 here is (SPICH0_WL - 1)
+    // ...wait for it to settle ...
+    DELAY SPI_CLOCK_HALF_PERIOD_CYCLES / 2 - 2 // make sure DELAY does not use r28 !!!
+    // ...then clock goes high ...
+    SET BITBANG_SPI_SCK
+    // ...we wait for the input bit to settle ...
+    DELAY SPI_CLOCK_HALF_PERIOD_CYCLES / 2 - 1 // make sure DELAY does not use r28 !!!
+    // we shift the input word left, so we discard the 
+    // bit we just wrote and we make room for the new incoming bit
+    LSL data, data, 1
+    // ...and we read the input
+    COPY_BIT data.t0, BITBANG_SPI_MISO
+    ADD r28, r28, 1
+    QBNE BITBANG_LOOP, r28, SPICH0_WL
+
+     // always make sure we pull the clock line down when we are done
+    CLR r30, BITBANG_SPI_SCK
+    CLR r30.t2
+.endm
+#else /* no BITBANG_SPI */
 // Write to SPICH0 TX register
 .macro SPICH0_TX
 .mparam data
-#ifdef BITBANG_SPI
-#else
      SBBO data, reg_spi_addr, SPI_CH0TX, 4
-#endif /* BITBANG_SPI */
 .endm
 
 // Wait for SPI to finish (uses RXS indicator)
 .macro SPICH0_WAIT_FOR_FINISH
- #ifndef BITBANG_SPI
  LOOP:
      LBBO r27, reg_spi_addr, SPI_CH0STAT, 4
      QBBC LOOP, r27, 0
-#endif /* BITBANG_SPI */
 .endm
 
 // Read the RX word to clear; store output
@@ -180,6 +223,7 @@
 .mparam data
      LBBO data, reg_spi_addr, SPI_CH0RX, 4
 .endm
+#endif /* BITBANG_SPI */
 
 // Complete SPICH0 write+read with chip select
 .macro SPICH0_WRITE
@@ -235,9 +279,14 @@ SET_CURRENT_DEVICE_DONE:
     // preload one word
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
 WRITE_BUFFER_LOOP:
+#ifdef BITBANG_SPI
+    BITBANG_SPI_TX_RX reg_curr_word
+    ADD reg_transmitted_words, reg_transmitted_words, SPICH0_WL_BYTES
+    LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
+#else /* no BITBANG_SPI */
 #ifdef DO_SPI
     SPICH0_TX reg_curr_word
-#endif
+#endif /* DO_SPI */
     // before waiting, we preload the next word (if any)
     QBGE WRITE_BUFFER_LOOP_PRELOAD_DONE, transmitLength, reg_transmitted_words
     ADD reg_transmitted_words, reg_transmitted_words, SPICH0_WL_BYTES
@@ -246,7 +295,9 @@ WRITE_BUFFER_LOOP:
 #ifdef DO_SPI
     SPICH0_WAIT_FOR_FINISH
     SPICH0_RX r10
-#endif
+#endif /* DO_SPI */
+#endif /* BITBANG_SPI */
+    LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
     QBLT WRITE_BUFFER_LOOP, transmitLength, reg_transmitted_words
     
     FINISH_TRANSACTION
@@ -264,15 +315,21 @@ WRITE_BUFFER_LOOP:
     // preload one word
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
 WRITE_BUFFER_LOOP:
+#ifdef BITBANG_SPI
+    // we are actually receiving only, so we send out zeros.
+    MOV reg_curr_word, 0
+    BITBANG_SPI_TX_RX reg_curr_word
+#else /* no BITBANG_SPI */
 #ifdef DO_SPI
     MOV r28, 0 // we are actually receiving only, so we send out zeros.
     SPICH0_TX r28
-    ADD reg_transmitted_words, reg_transmitted_words, SPICH0_WL_BYTES
     SPICH0_WAIT_FOR_FINISH
     SPICH0_RX reg_curr_word
+#endif
+#endif /* no BITBANG_SPI */
+    ADD reg_transmitted_words, reg_transmitted_words, SPICH0_WL_BYTES
     SUB r27, reg_transmitted_words, SPICH0_WL_BYTES
     SBBO reg_curr_word, buffer, r27, SPICH0_WL_BYTES
-#endif
 
 QBNE CHECK_DYNAMIC_LENGTH, reg_transmitted_words, 1
     // this is the first word
@@ -476,10 +533,6 @@ RECEIVE_FROM_DEVICES_DONE:
 .endm
 
 .macro MASTER_MODE
-// every millisecond scan slaves
-// keep internal count of ticks
-// every so often hand this over to ARM
-// signal ARM of buffer ready
 // CRC check ? ??
     // initialize reg_start_scan with a pointer to where the start_scan command is stored
     SPICH0_CS_UNASSERT_ALL
