@@ -102,22 +102,4 @@ unsigned int BoardsTopology::getLastActiveKey(unsigned int board)
 {
 	return indexes[board * numIndexesPerBoard + 1];
 }
-int BoardsTopology::getLowestNote()
-{
-	return _lowestNote;
-}
 
-int BoardsTopology::getHighestNote()
-{
-	return _highestNote;
-}
-
-int BoardsTopology::getLowestNote(unsigned int board)
-{
-	return boards[board]->getNote(getFirstActiveKey(board));
-}
-
-int BoardsTopology::getHighestNote(unsigned int board)
-{
-	return boards[board]->getNote(getLastActiveKey(board));
-}

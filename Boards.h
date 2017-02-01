@@ -54,13 +54,26 @@ public:
 	
 	unsigned int getLastActiveKey(unsigned int board);
 
-	int getLowestNote();
+	int getLowestNote()
+	{
+		return _lowestNote;
+	}
 
-	int getHighestNote();
+	int getHighestNote()
+	{
+		return _highestNote;
+	}
 
-	int getLowestNote(unsigned int board);
+	int getLowestNote(unsigned int board)
+	{
+		return boards[board]->getNote(getFirstActiveKey(board));
+	}
 
-	int getHighestNote(unsigned int board);
+	int getHighestNote(unsigned int board)
+	{
+		return boards[board]->getNote(getLastActiveKey(board));
+	}
+
 private:
 	void deallocBoard(unsigned int boardPosition);
 	void deallocBoards();
