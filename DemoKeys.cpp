@@ -27,7 +27,10 @@ int main()
 	bt.setBoard(2, 9, 23);
 	int ret = keys.start(&bt, &gShouldStop);
 	if(ret < 0)
-		printf("Error while keys.start(): %d %s\n", ret, strerror(-ret));
+	{
+		fprintf(stderr, "Error while starting the scan of the keys: %d %s\n", ret, strerror(-ret));
+		return 1;
+	}
 	
 	while(!gShouldStop)
 	{
