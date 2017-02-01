@@ -1,78 +1,78 @@
-// Standard header files
-#include <stdio.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <unistd.h>
-#include <string.h>
-#include <Gpio.h>
-#include <stdlib.h>
+#include <vector>
+#include <array>
 #include "Keys.h"
 
-void Board::setKeys(unsigned int firstActiveKey, unsigned int lastActiveKey, unsigned int lowestNote)
+void Keys::stop()
 {
-	_firstActiveKey = firstActiveKey;
-	_lastActiveKey = lastActiveKey;
-	_lowestNote = lowestNote;
+	_driver.stop();
 }
 
-int Board::getNote(unsigned int key)
+int Keys::start(BoardsTopology* bt, volatile int* shouldStop /* = NULL */)
 {
-	if(key < _firstActiveKey)
-		return -1;
-	if(key > _lastActiveKey)
-		return -2;
-	int note = key - _firstActiveKey + _lowestNote;
-	return note;
-}
+	stop();
+	// TODO: wait for stop
 
-void BoardsTopology::setBoard(unsigned int boardPosition, unsigned int firstActiveKey, unsigned int lastActiveKey)
-{
-	unsigned int size = indexes.size();
-	unsigned int requiredSize = std::max(size, (boardPosition + 1) * numIndexesPerBoard);
-	if(size < requiredSize){
-		indexes.resize(requiredSize);
-	}
-	unsigned int first = boardPosition * numIndexesPerBoard;
-	indexes[boardPosition * numIndexesPerBoard] = firstActiveKey;
-	indexes[boardPosition * numIndexesPerBoard + 1] = lastActiveKey;
-	updateBoards();
-}
-
-void BoardsTopology::updateBoards()
-{
-	unsigned int numBoards = indexes.size() / numIndexesPerBoard;
-	deallocBoards();
-	boards.resize(numBoards);
-	int startNote = _lowestNote;
-	for(int n = numBoards - 1; n >= 0; --n)
+	_bt = bt;
+	for(auto &buffer : _buffers)
 	{
-		int firstActiveKey = indexes[n * numIndexesPerBoard];
-		int lastActiveKey = indexes[n * numIndexesPerBoard + 1];
-		Board* board = new Board;
-		board->setKeys(firstActiveKey, lastActiveKey, startNote);
-		boards[n] = board;
-		int numNotes = board->getNumActiveKeys();
-		startNote += numNotes;
+		buffer.resize(_bt->getNumNotes());
+		for(auto &val : buffer)
+			val = 0;
 	}
-	_highestNote = startNote - 1;
+
+	int ret;
+	ret = _driver.init(bt->getNumBoards());
+	if(ret < 0)
+		return ret;
+		
+	ret = _driver.start(shouldStop, Keys::callback, (void*)this);
+	if(ret < 0)
+		return ret;
+
+	//TODO: scan boards and return number of boards found
+	//
+	return 1;
 }
 
-void BoardsTopology::deallocBoards()
+void Keys::callback(void* obj)
 {
-	for(auto &board : boards)
+	Keys* that = (Keys*)obj;
+	PruSpiKeysDriver* driver = &that->_driver;
+	BoardsTopology* bt = that->_bt;
+	float* noteBuffer = that->_buffers[!that->_activeBuffer].data();
+	unsigned int numBoards = bt->getNumBoards();
+	for(int board = numBoards - 1; board >= 0; --board)
 	{
-		delete board;
+		int16_t* boardBuffer = driver->getKeysData(board);
+		if(boardBuffer == NULL)
+		{ 
+			// new data not available at the moment, copy over the old data
+			printf("TODO: copy over the old data %d\n", board);
+			//TODO
+			continue;
+		}
+		// new data available, we convert them
+		int firstActiveKey = bt->getFirstActiveKey(board);
+		int lastActiveKey = bt->getLastActiveKey(board);
+		int currentNote = bt->getLowestNote(board) - bt->getLowestNote();
+		float* o = noteBuffer + currentNote;
+		int16_t* i = boardBuffer + firstActiveKey;
+		int16_t* iEnd = boardBuffer + lastActiveKey + 1;
+		for(; i < iEnd; ++i, ++o)
+		{
+			float out = *i / 4096.f;
+			if(out < 0)
+				out = 0;
+			*o = out;
+		}
 	}
-}
+	// when we are done with updating the new buffer, we 
+	// change the buffer in use.
+	that->_activeBuffer = !that->_activeBuffer;
 
-unsigned int BoardsTopology::getNumNotes()
-{
-	int numNotes = 0;
-	for(auto &board: boards)
-	{
-		numNotes += board->getNumActiveKeys();
-	}
-	return numNotes;
+	return;
+	printf("noteBuffer: %p (%d)|||", noteBuffer, that->_activeBuffer);
+	for(int n = bt->getLowestNote(); n <= bt->getHighestNote(); ++n)
+		printf("%1d ", (int)(that->getNoteValue(n)*10));
+	printf("\n");
 }
-
