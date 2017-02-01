@@ -7,18 +7,23 @@ CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include -g
 LDFLAGS ?= -L/usr/xenomai/lib -L/root/Bela/lib/
 LDLIBS = -lrt -lnative -lxenomai -lprussdrv
 OBJS ?= GPIOcontrol.o Keys.o Boards.o PruSpiKeysDriver.o
-DEMO_OBJS ?= DemoKeys.o 
-TEST_OBJS ?= TestKeys.o Keys.o GPIOcontrol.o Boards.o
+DEMO_OBJS ?= DemoKeys.o $(OBJS)
+TEST_OBJS ?= TestKeys.o $(OBJS)
+OLD_OBJS ?= main.o loader.o $(OBJS)
+
+DEMO_DEPS := $(notdir $(DEMO_OBJS:.o=.d))
+TEST_DEPS := $(notdir $(TEST_OBJS:.o=.d))
+OLD_DEPS := $(notdir $(OLD_OBJS:.o=.d))
+
 TEST_BINS ?= TestKeys
-OLD_OBJS ?= main.o loader.o
 OLD = main
 
 all: $(PRU_OBJS) $(OUTPUT)
 
-spi-pru: $(OLD) $(PRU_OBJS) # make sure you preserve the hard tab at the beginning of the next line
-	
+spi-pru: $(OLD) $(PRU_OBJS)
+	@#an empty recipe
 
-$(OLD): $(OLD_OBJS) $(OBJS)
+$(OLD): $(OLD_OBJS)
 
 spi-pru.bin: spi-pru.p
 	pasm -b spi-pru.p > /dev/null
@@ -27,8 +32,7 @@ Keys.o: Keys.h
 TestKeys.o: Keys.h
 DemoKeys.o: Keys.h
 
-$(OUTPUT): $(OBJS) $(DEMO_OBJS)
-	$(CXX) $(DEMO_OBJS) $(OBJS) -o $(OUTPUT) $(LDLIBS) $(LDFLAGS)
+$(OUTPUT): $(DEMO_OBJS)
 
 %.o: %.cpp
 	$(CXX) -std=c++11 -MMD -MP -MF"$(@:%.o=%.d)" "$<" -o "$@" -c $(CFLAGS)
@@ -39,6 +43,7 @@ clean:
 TestKeys: $(TEST_OBJS)
 
 test: $(TEST_BINS)
-	./TestKeys
+	@./TestKeys && echo "All tests passed" || echo "An error occurred"
 
+-include $(DEMO_DEPS) $(TEST_DEPS) $(OLD_DEPS)
 .phony: all spi-pru
