@@ -31,12 +31,9 @@ int main()
 	
 	while(!gShouldStop)
 	{
-		printf("value: %.3f %.3f %.3f %.3f\n", 
-			keys.getNoteValue(33),
-			keys.getNoteValue(41),
-			keys.getNoteValue(42),
-			keys.getNoteValue(43)
-		);
+		for(int n = bt.getLowestNote(); n < bt.getHighestNote(); ++n)
+		printf("%d ", (int)(10 * keys.getNoteValue(n)));
+		printf("\n");
 		usleep(100000);	
 	}
 	keys.stop();
