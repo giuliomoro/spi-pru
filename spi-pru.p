@@ -172,6 +172,7 @@
     QBA DONE
 CLEAR_OUTPUT_BIT:
     CLR output_bit
+    QBA DONE
     DONE:
 .endm
 
