@@ -28,7 +28,6 @@
 #include <rtdk.h>
 
 const uint32_t Polynomial = 0x04C11DB7;
-//const uint32_t Polynomial = 0xEDB88320;
 
 uint32_t crc32_bitwise(const void* data, size_t length)
 {
@@ -330,6 +329,8 @@ int spi_pru_loader (void)
 	testGpio2.open(67, 1);
 	Gpio testGpio3;
 	testGpio3.open(69, 1);
+	Gpio testGpio4;
+	testGpio4.open(68, 1);
 
     if(prepareGPIO(1)){
 	}
@@ -453,7 +454,8 @@ int spi_pru_loader (void)
 	memset(log, 0, 100);
 	memset((void*)t32, 0, 0x1000);
 
-    uint8_t* pruBuffers[] = {(uint8_t*)t32, ((uint8_t*)t32) + 0x400};
+	int dev = 2;
+    uint8_t* pruBuffers[] = {(uint8_t*)t32 + 0x100 * dev, ((uint8_t*)t32) + 0x400 + 0x100 * dev};
     uint32_t* pruCommon = (uint32_t*)(((uint8_t*)t32) + 0x800);
 	*pruCommon = 0; // initialize the area where common flags are written
     int lastPruBuffer = *pruCommon;
@@ -502,7 +504,7 @@ int spi_pru_loader (void)
                         //gShouldStop = 1;
                     }
                     rt_task_sleep(1000);
-                } else if (get_key_position_raw(0) < 500) {
+                } else if (get_key_position_raw(23) < 500) {
                     ++outofrange;
                 } else {
                     ++successful;
@@ -515,7 +517,7 @@ int spi_pru_loader (void)
             } else {
                 if(verbose && 0) rt_printf("l: %3d, f: %3d, t: %#10x -- data: ", (uint32_t)receivedLength, frameType, timestamp);
                 if(frameType == 19){
-					for(int p = 256 * 3; p >= 0; p -= 256){
+					for(int p = 256 * (2 - dev); p >= 0; p -= 256){
 						if(!(devices & (1 << p/256))) continue;
 						if(verbose) rt_printf(" || ");
 						for(int n = p + 8; n < p + 58; n += 2){
@@ -526,13 +528,15 @@ int spi_pru_loader (void)
 							if (verbose) rt_printf("%1.0f ", value * 10);
 						}
 					}
-                }
+                } else {
+					rt_printf("ERRRPPPPPPPPPPPR: frame %d\n", frameType);
+				}
             }
         }
         if (verbose) rt_printf("\n");
         ++ticks;
         if(ticks % 1000 == 0){
-            if (verbose) rt_printf("------------------------------------successful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), empty: %d(%.3f%%), outoforder: %d(%.3f%%), \n",
+            if (verbose) rt_printf("\n\n------------------------------------successful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), empty: %d(%.3f%%), outoforder: %d(%.3f%%), \n",
                 successful, successful/(float)ticks * 100,
                 outofrange, outofrange/(float)ticks * 100,
                 corrupted, corrupted/(float)ticks * 100,
@@ -706,7 +710,7 @@ int spi_pru_loader (void)
     prussdrv_pru_disable(PRU_NUM);
     prussdrv_exit ();
     usleep(100000);
-    printf("------------------------------------successful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), empty: %d(%.3f%%), outoforder: %d(%.3f%%), total: %d\n",
+    printf("\n------------------------------------successful: %d(%.3f%%), outofrange: %d(%.3f%%), corrupted: %d(%.3f%%), empty: %d(%.3f%%), outoforder: %d(%.3f%%), total: %d\n",
        successful, successful/(float)ticks * 100,
        outofrange, outofrange/(float)ticks * 100,
        corrupted, corrupted/(float)ticks * 100,
