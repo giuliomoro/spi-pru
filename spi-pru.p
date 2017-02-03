@@ -26,7 +26,11 @@
 
 #ifdef USING_PRU_1
 #define BITBANG_SPI
-#endif
+//#define BITBANG_SPI_FASTEST // allows to obtain a 10MHz symmetrical clock
+#ifndef BITBANG_SPI_FASTEST
+#define BITBANG_SPI_CLOCK_SLEEP 4 // a value of 0 gives a bitbang clock of 7.7 MHz. Add here additional sleep time (in 10ns).
+#endif /* BITBANG_SPI_FASTEST */
+#endif /* USING_PRU_1 */
 
 //#ifndef BITBANG_SPI
 #define SPICH0_TRM       0       // SPI transmit and receive
@@ -53,12 +57,9 @@
 #ifdef BITBANG_SPI
 // these are the pins of the PRU''s own GPIOs that we want to use 
 // for bitbang SPI. Only available on PRU1.
-#define BITBANG_SPI_SCK r30.t0 /* P8_45 */
-#define BITBANG_SPI_MOSI r30.t1 /* P8_46 */
-#define BITBANG_SPI_MISO r31.t3 /* P8_44 */
-#define SPI_CLOCK_FREQ 10000000
-#define SPI_CLOCK_PERIOD_CYCLES (PRU_SPEED/SPI_CLOCK_FREQ)
-#define SPI_CLOCK_HALF_PERIOD_CYCLES (SPI_CLOCK_PERIOD_CYCLES / 2)
+#define BITBANG_SPI_SCK_R30_PIN 0 /* P8_45 */
+#define BITBANG_SPI_MOSI_R30_PIN 1 /* P8_46 */
+#define BITBANG_SPI_MISO_R31_PIN 3 /* P8_44 */
 #endif
 
 #define SPICH0_CS_GPIO   GPIO2
@@ -163,12 +164,12 @@
 
 #ifdef BITBANG_SPI
 .macro COPY_BIT
-.mparam output_bit, input_bit
-    QBBC CLEAR_OUTPUT_BIT, input_bit
-    SET output_bit
+.mparam output_reg, output_bit, input_reg, input_bit
+    QBBC CLEAR_OUTPUT_BIT, input_reg, input_bit
+    SET output_reg, output_bit
     QBA DONE
 CLEAR_OUTPUT_BIT:
-    CLR output_bit
+    CLR output_reg, output_bit
     QBA DONE
     DONE:
 .endm
@@ -177,28 +178,49 @@ CLEAR_OUTPUT_BIT:
 .mparam data
     // r28 is our pointer to the current bit in the input/output word
     MOV r28, 0
-    // get the clock spinning
+
 BITBANG_LOOP:
-    // clock low ...
-    CLR BITBANG_SPI_SCK
-    // ...write the output bit ...
-    COPY_BIT BITBANG_SPI_MOSI, data.t7 // .t7 here is (SPICH0_WL - 1)
-    // ...wait for it to settle ...
-    DELAY SPI_CLOCK_HALF_PERIOD_CYCLES / 2 + 4 // make sure DELAY does not use r28 !!!
-    // ...then clock goes high ...
-    SET BITBANG_SPI_SCK
-    // ...we wait for the input bit to settle ...
-    DELAY SPI_CLOCK_HALF_PERIOD_CYCLES / 2 + 5 // make sure DELAY does not use r28 !!!
-    // we shift the input word left, so we discard the 
-    // bit we just wrote and we make room for the new incoming bit
+    // 1) set clock low and at the same time write the output bit.
+    //    Prepare the value to write to r30:
+    //    read the current value ...
+    MOV r27, r30
+    //    ... clear the clock bit (clock low) ...
+    CLR r27, BITBANG_SPI_SCK_R30_PIN
+    //    ... copy the leftmost bit from the data to be written ...
+    COPY_BIT r27, BITBANG_SPI_MOSI_R30_PIN, data, (SPICH0_WL - 1)
+    //    ... now that r27 is ready with the clock and data out value,
+    //        write it to r30 at once
+    MOV r30, r27
+    // do some house keeping before sleeping:
+    //    we shift the input word left, so we discard the 
+    //    bit we just wrote and we make room for the 
+    //    incoming bit in in data.t0 ...
     LSL data, data, 1
-    // ...and we read the input
-    COPY_BIT data.t0, BITBANG_SPI_MISO
+    // we increment the bit counter here
     ADD r28, r28, 1
+    // 2) wait while holding the clock low
+    //   DELAY times and NOP have been tweaked using a scope
+    //   in order to obtain a symmetrical clock
+#ifdef BITBANG_SPI_FASTEST
+    DELAY 3
+#else
+    MOV r27, r27 // NOP, to make clock symmetric
+    DELAY 4 + BITBANG_SPI_CLOCK_SLEEP
+#endif /* BITBANG_SPI_FASTEST */
+    // 3) clock goes high: this triggers the slave to write its
+    //    output bit to the MISO line
+    SET r30, BITBANG_SPI_SCK_R30_PIN
+    // 4) wait while holding clock high
+#ifndef BITBANG_SPI_FASTEST
+    DELAY 1 + BITBANG_SPI_CLOCK_SLEEP
+#endif /* ifndef BITBANG_SPI_FASTEST */
+    // 5) we read the input:
+    // ... and we fill bit 0 with the one we read from r31
+    COPY_BIT data, 0, r31, BITBANG_SPI_MISO_R31_PIN
     QBNE BITBANG_LOOP, r28, SPICH0_WL
 
-     // always make sure we pull the clock line down when we are done
-    CLR BITBANG_SPI_SCK
+    // always make sure we pull the clock line down when we are done
+    CLR r30, BITBANG_SPI_SCK_R30_PIN
 .endm
 
 #else /* no BITBANG_SPI */
