@@ -35,8 +35,8 @@
 #define SPICH0_CLK_MODE  0       // SPI mode
 #define SPICH0_CLK_DIV   2      // Clock divider (48MHz / 2^n)
 #define SPICH0_DPE       1       // d0 = receive, d1 = transmit
-#define SPICH0_RW_GPIO   GPIO1
-#define SPICH0_RW_PIN    (1<<16) // GPIO1:16 = P9 pin 15
+#define SPICH0_RW_GPIO   GPIO2
+#define SPICH0_RW_PIN    (1<<16) // GPIO2:4 = P8 pin 10
 //#endif
 
 
@@ -53,9 +53,9 @@
 #ifdef BITBANG_SPI
 // these are the pins of the PRU''s own GPIOs that we want to use 
 // for bitbang SPI. Only available on PRU1.
-#define BITBANG_SPI_SCK r30.t0
-#define BITBANG_SPI_MOSI r30.t1
-#define BITBANG_SPI_MISO r31.t3
+#define BITBANG_SPI_SCK r30.t0 /* P8_45 */
+#define BITBANG_SPI_MOSI r30.t1 /* P8_46 */
+#define BITBANG_SPI_MISO r31.t3 /* P8_44 */
 #define SPI_CLOCK_FREQ 10000000
 #define SPI_CLOCK_PERIOD_CYCLES (PRU_SPEED/SPI_CLOCK_FREQ)
 #define SPI_CLOCK_HALF_PERIOD_CYCLES (SPI_CLOCK_PERIOD_CYCLES / 2)
@@ -137,21 +137,18 @@
 .macro SPICH0_CS_ASSERT_CURRENT_DEVICE
     /* Set relevant CS/ line(s) low */
     CLEAR_GPIO SPICH0_CS_GPIO, reg_current_device_cs
-    //clr r30, reg_current_device_cs
 .endm
 
 // Bring CS line(s) high at end of SPICH0 transaction
 .macro SPICH0_CS_UNASSERT_CURRENT_DEVICE
     /* Set relevant CS/ line(s) high */
     SET_GPIO SPICH0_CS_GPIO, reg_current_device_cs
-    //set r30, reg_current_device_cs
 .endm
 
 // shorthand which avoids to reset all CS lines 
 // without having to change reg_device
 .macro SPICH0_CS_UNASSERT_ALL
     SET_GPIO SPICH0_CS_GPIO, CS_PIN_DEVICE_ALL
-    //OR r30, reg_current_device_cs
 .endm
 
 // Bring CS line low to write to SPI
@@ -178,7 +175,6 @@ CLEAR_OUTPUT_BIT:
 
 .macro BITBANG_SPI_TX_RX
 .mparam data
-    SET r30.t2
     // r28 is our pointer to the current bit in the input/output word
     MOV r28, 0
     // get the clock spinning
@@ -202,10 +198,11 @@ BITBANG_LOOP:
     QBNE BITBANG_LOOP, r28, SPICH0_WL
 
      // always make sure we pull the clock line down when we are done
-    CLR r30, BITBANG_SPI_SCK
-    CLR r30.t2
+    CLR BITBANG_SPI_SCK
 .endm
+
 #else /* no BITBANG_SPI */
+
 // Write to SPICH0 TX register
 .macro SPICH0_TX
 .mparam data
