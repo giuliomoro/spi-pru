@@ -611,6 +611,7 @@ START:
     CLR     r0, r0, 4   // Clear SYSCFG[STANDBY_INIT] to enable OCP master port
     SBCO      r0, C4, 4, 4
 
+#ifndef BITBANG_SPI
     MOV reg_spi_addr, SPI_BASE
     // Init SPI clock
     MOV r2, 0x02
@@ -639,6 +640,7 @@ SPI_WAIT_RESET:
     // Turn on SPI channels
     MOV r2, 0x01
     SBBO r2, reg_spi_addr, SPI_CH0CTRL, 4
+#endif /* BITBANG_SPI */
 
     MOV reg_device, 0
     MOV reg_num_devices, 4
