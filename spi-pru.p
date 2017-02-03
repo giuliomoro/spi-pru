@@ -184,11 +184,11 @@ BITBANG_LOOP:
     // ...write the output bit ...
     COPY_BIT BITBANG_SPI_MOSI, data.t7 // .t7 here is (SPICH0_WL - 1)
     // ...wait for it to settle ...
-    DELAY SPI_CLOCK_HALF_PERIOD_CYCLES / 2 - 2 // make sure DELAY does not use r28 !!!
+    DELAY SPI_CLOCK_HALF_PERIOD_CYCLES / 2 + 4 // make sure DELAY does not use r28 !!!
     // ...then clock goes high ...
     SET BITBANG_SPI_SCK
     // ...we wait for the input bit to settle ...
-    DELAY SPI_CLOCK_HALF_PERIOD_CYCLES / 2 - 1 // make sure DELAY does not use r28 !!!
+    DELAY SPI_CLOCK_HALF_PERIOD_CYCLES / 2 + 5 // make sure DELAY does not use r28 !!!
     // we shift the input word left, so we discard the 
     // bit we just wrote and we make room for the new incoming bit
     LSL data, data, 1
