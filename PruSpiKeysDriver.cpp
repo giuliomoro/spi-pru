@@ -55,6 +55,12 @@ int PruSpiKeysDriver::init(int numBoards)
 			_pruEnabled = true;
 		}
 	}
+
+	// Initialize the GPIO pins in use for CS and R/W lines
+	for(int n = 0; n < numGpios; ++n)
+	{
+		gpios[n].open(gpioPins[n], 1);
+	}
 	return 1;
 }
 

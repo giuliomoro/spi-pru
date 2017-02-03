@@ -126,5 +126,13 @@ private:
 	uint8_t* buffers[2];
 	const unsigned int _loopTaskPriority = 90;
 	const char* _loopTaskName = "SpiPruKeysDriverTask";
+	static Gpio gpios[4];
+	static const unsigned int numGpios = 4;
+	static constexpr unsigned int gpioPins[numGpios] = {
+		68, // P8_10, R/W
+		66, // P8_07, CS0
+		67, // P8_08, CS1
+		69  // P8_09, CS2
+	};
 };
 #endif /* PRUSPIKEYDRIVER_H_INCLUDED */
