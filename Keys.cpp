@@ -44,16 +44,23 @@ void Keys::callback(void* obj)
 	for(int board = numBoards - 1; board >= 0; --board)
 	{
 		int16_t* boardBuffer = driver->getKeysData(board);
+		int firstActiveKey = bt->getFirstActiveKey(board);
+		int lastActiveKey = bt->getLastActiveKey(board);
 		if(boardBuffer == NULL)
 		{ 
 			// new data not available at the moment, copy over the old data
-			printf("TODO: copy over the old data %d\n", board);
-			//TODO
+			int currentNote = bt->getLowestNote(board) - bt->getLowestNote();
+			float* oldNoteBuffer = that->_buffers[that->_activeBuffer].data();
+			float* i = oldNoteBuffer + currentNote;
+			float* o = noteBuffer + currentNote;
+			float* iEnd = i + lastActiveKey - firstActiveKey + 1;
+			for(; i < iEnd; ++i, ++o)
+			{
+				*o = *i;
+			}
 			continue;
 		}
 		// new data available, we convert them
-		int firstActiveKey = bt->getFirstActiveKey(board);
-		int lastActiveKey = bt->getLastActiveKey(board);
 		int currentNote = bt->getLowestNote(board) - bt->getLowestNote();
 		float* o = noteBuffer + currentNote;
 		int16_t* i = boardBuffer + firstActiveKey;
@@ -71,8 +78,4 @@ void Keys::callback(void* obj)
 	that->_activeBuffer = !that->_activeBuffer;
 
 	return;
-	printf("noteBuffer: %p (%d)|||", noteBuffer, that->_activeBuffer);
-	for(int n = bt->getLowestNote(); n <= bt->getHighestNote(); ++n)
-		printf("%1d ", (int)(that->getNoteValue(n)*10));
-	printf("\n");
 }

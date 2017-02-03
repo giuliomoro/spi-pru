@@ -2,8 +2,33 @@
 #include <pruss_intc_mapping.h>
 
 #include "PruSpiKeysDriver.h"
-int PruSpiKeysDriver::init(int numBoards)
+
+#include <inttypes.h>
+static const uint32_t Polynomial = 0x04C11DB7;
+
+static uint32_t crc32_bitwise(const void* data, size_t length)
 {
+  uint32_t previousCrc32 = 0;
+  uint32_t crc = ~previousCrc32;
+  unsigned char* current = (unsigned char*) data;
+  while (length--)
+  {
+	unsigned int data = *current++;
+    crc ^= data;
+    for (unsigned int j = 0; j < 8; j++)
+      crc = (crc >> 1) ^ (-(int)(crc & 1) & Polynomial);
+  }
+  return ~crc; // same as crc ^ 0xFFFFFFFF
+}
+
+Gpio PruSpiKeysDriver::gpios[4];
+constexpr unsigned int PruSpiKeysDriver::gpioPins[4];
+const unsigned int PruSpiKeysDriver::numGpios;
+
+int PruSpiKeysDriver::init(unsigned int numBoards)
+{
+	_numBoards = numBoards;
+
 	/* Initialize the PRU */
 	int ret;
 	if(!_pruInited)
@@ -81,7 +106,7 @@ int PruSpiKeysDriver::start(volatile int* shouldStop, void(*callback)(void*), vo
 		return ret;
 
 	_callbackArg = arg;
-	printf("TODO: set flag on PRU so that it switches to MASTER_MODE\n");
+	//printf("TODO: set flag on PRU so that it switches to MASTER_MODE\n");
 
 	ret = rt_task_start(&_loopTask, loop, this);
 	if(ret){
@@ -132,9 +157,46 @@ void PruSpiKeysDriver::loop(void* arg)
 		}
 
 		lastBuffer = buffer;
-		// TODO: validate CRC and set valid data appropriately
-		that->_validData = 0xff;
+		that->_validData = 0;
 
+		int activeBoards = that->context->activeBoards;
+		// int numBoards = __builtin_popcount(activeBoards); // __builtin_popcount returns the number of bits set
+
+		// For each frame of data received, validate CRC and set _validData appropriately
+		for(unsigned int n = 0; n < that->_numBoards; ++n)
+		{
+			uint8_t* data = that->getBoardData(n);
+			int receivedLength = data[0];
+			int moreData = data[1];
+			int frameType = data[2];
+			int zero = data[3];
+			uint32_t timestamp;
+			memcpy((void*)&timestamp, (void*)&data[4], 4);
+			uint32_t paddedLength = (receivedLength + 3) & ~3;
+			uint32_t receivedCrc;
+			memcpy((void*)&receivedCrc, (void*)&data[paddedLength], 4);
+			uint32_t computedCrc = crc32_bitwise((void*)data, paddedLength >> 2);
+			if(computedCrc != receivedCrc)
+			{
+				// invalid crc
+				activeBoards = markBoardDisabled(n, activeBoards);
+				continue;
+			}
+			if(frameType == 20)
+			{
+				// empty frame
+				activeBoards = markBoardDisabled(n, activeBoards);
+				continue;
+			}
+			if(frameType != 19)
+			{
+				// unknwon frame
+				activeBoards = markBoardDisabled(n, activeBoards);
+				continue;
+			}
+		}
+
+		that->_validData = activeBoards;
 		that->_callback(that->_callbackArg);
 	}
 }

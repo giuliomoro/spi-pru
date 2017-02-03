@@ -45,7 +45,7 @@ public:
 	 * @return the boards discovered in case of success, a negative
 	 * value otherwise.
 	 */
-	int init(int numBoards);
+	int init(unsigned int numBoards);
 
 	/**
 	 * Starts the PRU loop in continuous scan mode:
@@ -96,11 +96,17 @@ public:
 		return context->ticks;
 	}
 
+	uint8_t* getBoardData(unsigned int board)
+	// inlined for speed
+	{
+		return getData() + board * PRU_BOARD_BUFFER_SIZE;
+	}
+
 	int16_t* getKeysData(unsigned int board)
 	// inlined for speed
 	{
 		if(wasDataValid(board))
-			return (int16_t*)(getData() + board * PRU_BOARD_BUFFER_SIZE + PRU_BOARD_KEYS_DATA_OFFSET);
+			return (int16_t*)(getBoardData(board) + PRU_BOARD_KEYS_DATA_OFFSET);
 		else
 			return NULL;
 	}
@@ -109,6 +115,11 @@ private:
 	bool wasDataValid(unsigned int board)
 	{
 		return (1 << board) & _validData;	
+	}
+
+	static uint32_t markBoardDisabled(unsigned int board, uint32_t activeBoards)
+	{
+		return activeBoards &= ~(1 << board);
 	}
 
 	bool _pruInited;
@@ -120,6 +131,7 @@ private:
 	volatile int _shouldStop;
 	volatile int* _externalShouldStop;
 	uint8_t* _pruMem;
+	unsigned int _numBoards;
 	void(*_callback)(void*);
 	void* _callbackArg;
 	PruSpiKeysDriverContext* volatile context;
