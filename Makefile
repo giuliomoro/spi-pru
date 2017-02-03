@@ -23,7 +23,8 @@ all: $(PRU_OBJS) $(OUTPUT)
 spi-pru: $(OLD) $(PRU_OBJS)
 	@#an empty recipe
 
-$(OLD): $(OLD_OBJS)
+$(OLD): $(OLD_OBJS) spi-pru.bin
+	$(CC) $(LDFLAGS) $(OLD_OBJS) $(LDLIBS) -o $(OLD)
 
 spi-pru.bin: spi-pru.p
 	pasm -b spi-pru.p > /dev/null
