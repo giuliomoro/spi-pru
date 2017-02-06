@@ -7,7 +7,7 @@ extern "C" {
 typedef void* BoardsTopology;
 #endif
 
-BoardsTopology* BoardsTopology_new();
+BoardsTopology* BoardsTopology_new(void);
 
 void BoardsTopology_delete(BoardsTopology* that);
 
@@ -18,6 +18,11 @@ int BoardsTopology_getNote(BoardsTopology* that, unsigned int board, unsigned in
 unsigned int BoardsTopology_getFirstActiveKey(BoardsTopology* that, unsigned int board);
 unsigned int BoardsTopology_getLastActiveKey(BoardsTopology* that, unsigned int board);
 int BoardsTopology_getLowestNote(BoardsTopology* that);
+int BoardsTopology_getLowestNoteBoard(BoardsTopology* that, unsigned int board);
+int BoardsTopology_getHighestNote(BoardsTopology* that);
+int BoardsTopology_getHighestNoteBoard(BoardsTopology* that, unsigned int board);
+int BoardsTopology_getNumBoards(BoardsTopology* that);
+int BoardsTopology_getNumNotes(BoardsTopology* that);
 
 #ifdef __cplusplus
 }

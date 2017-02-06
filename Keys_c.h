@@ -2,21 +2,22 @@
 #define KEYS_C_H
 #ifdef __cplusplus
 #include "Keys.h"
+#include "BoardsTopology_c.h"
 extern "C" {
 #else  /* if in C, we should define the types */
 typedef void* Keys;
 typedef void* BoardsTopology;
 #endif
 
-Keys* keys_new();
+Keys* Keys_new(void);
 
-void keys_delete(Keys* that);
+void Keys_delete(Keys* that);
 
-int keys_start(Keys* that, BoardsTopology* bt, volatile int* shouldStop);
+int Keys_start(Keys* that, BoardsTopology* bt, volatile int* shouldStop);
 
-void keys_stop(Keys* that);
+void Keys_stop(Keys* that);
 
-float keys_getNoteValue(Keys* that, int note);
+float Keys_getNoteValue(Keys* that, int note);
 
 #ifdef __cplusplus
 }

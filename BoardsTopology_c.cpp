@@ -1,11 +1,11 @@
 #include "BoardsTopology_c.h"
 
-BoardsTopology* boardsTopology_new()
+BoardsTopology* BoardsTopology_new()
 {
 	return new BoardsTopology;
 }
 
-void boardsTopology_delete(BoardsTopology* that)
+void BoardsTopology_delete(BoardsTopology* that)
 {
 	delete that;
 }
@@ -38,4 +38,29 @@ unsigned int BoardsTopology_getLastActiveKey(BoardsTopology* that, unsigned int 
 int BoardsTopology_getLowestNote(BoardsTopology* that)
 {
 	return that->getLowestNote();
+}
+
+int BoardsTopology_getLowestNoteBoard(BoardsTopology* that, unsigned int board)
+{
+	return that->getLowestNote(board);
+}
+
+int BoardsTopology_getHighestNote(BoardsTopology* that)
+{
+	return that->getHighestNote();
+}
+
+int BoardsTopology_getHighestNoteBoard(BoardsTopology* that, unsigned int board)
+{
+	return that->getHighestNote(board);
+}
+
+int BoardsTopology_getNumBoards(BoardsTopology* that)
+{
+	return that->getNumBoards();
+}
+
+int BoardsTopology_getNumNotes(BoardsTopology* that)
+{
+	return that->getNumNotes();
 }
