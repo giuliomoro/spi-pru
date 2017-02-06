@@ -525,7 +525,8 @@ int spi_pru_loader (void)
 							memcpy(&raw, (void*)&(data[n]), 2);
 							float value = raw/4096.f;
 							value = value < 0 ? 0 : value;
-							if (verbose) rt_printf("%1.0f ", value * 10);
+							if (verbose) rt_printf("%5d ",  raw);
+							//if (verbose) rt_printf("%1.0f ", value * 10);
 						}
 					}
                 } else {
