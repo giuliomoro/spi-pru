@@ -13,7 +13,7 @@ void keys_delete(Keys* that)
 
 int keys_start(Keys* that, BoardsTopology* bt, volatile int* shouldStop)
 {
-	that->start(bt, shouldStop);
+	return that->start(bt, shouldStop);
 }
 
 void keys_stop(Keys* that)
