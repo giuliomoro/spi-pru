@@ -1,3 +1,5 @@
+#ifndef BOARDS_C_H
+#define BOARDS_C_H
 #include <vector>
 
 class Board
@@ -87,3 +89,4 @@ private:
 	static const unsigned int numIndexesPerBoard = 2;
 };
 
+#endif /* BOARD_C_H */
