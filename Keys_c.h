@@ -2,11 +2,10 @@
 #define KEYS_C_H
 #ifdef __cplusplus
 #include "Keys.h"
-#include "BoardsTopology_c.h"
 extern "C" {
 #else  /* if in C, we should define the types */
+#include "BoardsTopology_c.h"
 typedef void* Keys;
-typedef void* BoardsTopology;
 #endif
 
 Keys* Keys_new(void);
