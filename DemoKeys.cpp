@@ -22,9 +22,11 @@ int main()
 	BoardsTopology bt;
 	// Let's build a topology for just above 5 octaves, A to C
 	bt.setLowestNote(33);
-	bt.setBoard(0, 0, 24);
-	bt.setBoard(1, 0, 23);
-	bt.setBoard(2, 9, 23);
+	//bt.setBoard(0, 0, 24);
+	//bt.setBoard(1, 0, 23);
+	//bt.setBoard(2, 9, 23);
+	bt.setBoard(0, 0, 23);
+	bt.setBoard(1, 9, 23);
 	int ret = keys.start(&bt, &gShouldStop);
 	if(ret < 0)
 	{
@@ -32,10 +34,35 @@ int main()
 		return 1;
 	}
 	
+	keys.startTopCalibration();
+	while(!gShouldStop && !keys.isTopCalibrationDone())
+	{
+		usleep(10000);
+	}
+	keys.dumpTopCalibration();
+
+	int count = 30;
+	printf("Bottom calibration...");
+	fflush(stdout);
+	keys.startBottomCalibration();
+	while(!gShouldStop && count--)
+	{
+		for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
+			printf("%2d ", (int)(10 * keys.getNoteValue(n)));
+		printf("\n");
+		usleep(100000);	
+	}
+	printf("done\n");
+	keys.stopBottomCalibration();
+	keys.dumpBottomCalibration();
+
+	char path[] = "out.txt";
+	keys.saveCalibrationFile(path);
+	keys.useCalibration(true);
 	while(!gShouldStop)
 	{
-		for(int n = bt.getLowestNote(); n < bt.getHighestNote(); ++n)
-			printf("%d ", (int)(10 * keys.getNoteValue(n)));
+		for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
+			printf("%2d ", (int)(10 * keys.getNoteValue(n)));
 		printf("\n");
 		usleep(100000);	
 	}

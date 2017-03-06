@@ -1,6 +1,8 @@
 #include <vector>
 #include <array>
 #include "Keys.h"
+#include <iostream>
+#include <fstream>
 
 void Keys::stop()
 {
@@ -60,22 +62,96 @@ void Keys::callback(void* obj)
 			}
 			continue;
 		}
-		// new data available, we convert them
+		// new data available
+		unsigned int length = lastActiveKey - firstActiveKey + 1;
+		int16_t* boardBufferStart = boardBuffer + firstActiveKey;
 		int currentNote = bt->getLowestNote(board) - bt->getLowestNote();
-		float* o = noteBuffer + currentNote;
-		int16_t* i = boardBuffer + firstActiveKey;
-		int16_t* iEnd = boardBuffer + lastActiveKey + 1;
-		for(; i < iEnd; ++i, ++o)
+		if(that->_calibratingTop[board])
 		{
-			float out = *i / 4096.f;
-			if(out < 0)
-				out = 0;
-			*o = out;
+			that->calibration[board]->calibrateTop(boardBufferStart, length);
+			that->_calibratingTop[board] = !that->calibration[board]->isTopCalibrationDone();
 		}
+		else if(that->_calibratingBottom[board])
+		{
+			that->calibration[board]->calibrateBottom(boardBufferStart, length);
+		}
+
+		if(that->_shouldUseCalibration)
+		{
+			float* o = noteBuffer + currentNote;
+			that->calibration[board]->apply(o, boardBufferStart, length);
+		}
+		else
+		{
+			//convert them to float
+			float* o = noteBuffer + currentNote;
+			int16_t* i = boardBuffer + firstActiveKey;
+			int16_t* iEnd = boardBuffer + lastActiveKey + 1;
+			for(; i < iEnd; ++i, ++o)
+			{
+				float out = *i / 4096.f;
+				if(out < 0)
+					out = 0;
+				*o = out;
+			}
+		}
+
+
 	}
 	// when we are done with updating the new buffer, we 
 	// change the buffer in use.
 	that->_activeBuffer = !that->_activeBuffer;
 
 	return;
+}
+
+bool Keys::saveCalibrationFile(const char* path)
+{
+	// format: [note#] [board] [top] [bottom]
+	std::ofstream file;
+	file.open(path);
+	for(int board = _bt->getNumBoards() - 1; board >= 0; --board)
+	{
+		//file << "# Board: " << board << "\n";
+		std::vector<int32_t> top = calibration[board]->getTop();
+		std::vector<int16_t> bottom = calibration[board]->getBottom();
+		unsigned int length = _bt->getHighestNote(board) - _bt->getLowestNote(board) + 1;
+		for(unsigned int n = 0; n < length; ++n)
+			file << n << " " << board << " " <<  top[n] << " " << bottom[n] << "\n";
+	}
+	file.close();
+	return true;
+}
+
+bool Keys::loadCalibrationFile(const char* path)
+{
+	// format: [note#] [board] [top] [bottom]
+	stopTopCalibration();
+	stopBottomCalibration();
+	std::ifstream inputFile;
+	try
+	{
+		inputFile.open(path);
+		if(inputFile.fail())
+		{
+			return false;
+		}
+		while(!inputFile.eof())
+		{
+			unsigned int key;
+			int32_t top;
+			int16_t bottom;
+			unsigned int board;
+			inputFile >> key;
+			inputFile >> board;
+			inputFile >> top;
+			inputFile >> bottom;
+			calibration[board]->set(key, top, bottom);
+		}
+	}
+	catch(...)
+	{
+		return false;
+	}
+	return true;
 }

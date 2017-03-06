@@ -5,9 +5,9 @@ OUTPUT_LIB=libbed
 OUTPUT_STATIC=DemoKeysStatic
 OUTPUT_SHARED=DemoKeysShared
 
-CC=clang
-CXX=clang++
-OPT_FLAGS ?= -O3 -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
+#CC=clang
+#CXX=clang++
+OPT_FLAGS ?= -g -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
 PRU_OBJS ?= spi-pru.bin
 
 C_OBJS ?= Keys_c.o BoardsTopology_c.o

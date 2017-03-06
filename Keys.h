@@ -6,6 +6,7 @@
 #include <inttypes.h>
 #include "Boards.h"
 #include "PruSpiKeysDriver.h"
+#include "Calibrate.h"
 
 #include <stdio.h>
 class Keys
@@ -14,6 +15,7 @@ public:
 	Keys() :
 		_buffers()
 		, _activeBuffer(false)
+		, _shouldUseCalibration(false)
 	{};
 
 	~Keys()
@@ -45,11 +47,92 @@ public:
 
 	void setTimeResolution(unsigned int milliseconds);
 
+	void startTopCalibration()
+	{
+		for(auto cal : calibration)
+			delete cal;
+		unsigned int numBoards = _bt->getNumBoards();
+		calibration.resize(numBoards);
+		_calibratingTop.resize(numBoards);
+		_calibratingBottom.resize(numBoards);
+		for(unsigned int n = 0; n < numBoards; ++n)
+		{
+			int numKeys = _bt->getLastActiveKey(n) - _bt->getFirstActiveKey(n) + 1;
+			calibration[n] = new Calibration(numKeys);
+			_calibratingTop[n] = true;
+		}
+	}
+
+	bool isTopCalibrationDone()
+	{
+		for(unsigned int n = 0; n < _calibratingTop.size(); ++n)
+		{
+			if(_calibratingTop[n])
+				return false;
+		}
+		return true;
+	}
+
+	void stopTopCalibration()
+	{
+		for(unsigned int n = 0; n < _calibratingTop.size(); ++n)
+		{
+			_calibratingTop[n] = false;
+		}
+	}
+
+	void dumpTopCalibration()
+	{
+		for(int n = _bt->getNumBoards() - 1; n >= 0; --n)
+		{
+			calibration[n]->dumpTopCalibration(_bt->getLowestNote(n));
+		}
+	}
+
+	void dumpBottomCalibration()
+	{
+		for(int n = _bt->getNumBoards() - 1; n >= 0; n--)
+		{
+			calibration[n]->dumpBottomCalibration(_bt->getLowestNote(n));
+		}
+	}
+
+	void startBottomCalibration()
+	{
+		unsigned int numBoards = _bt->getNumBoards();
+		for(unsigned int n = 0; n < numBoards; ++n)
+		{
+			calibration[n]->startBottomCalibration();
+			_calibratingBottom[n] = true;
+		}
+	}
+
+	void stopBottomCalibration()
+	{
+		for(unsigned int n = 0; n < _calibratingBottom.size(); ++n)
+		{
+			_calibratingBottom[n] = false;
+		}
+	}
+
+	bool loadCalibrationFile(const char* path);
+
+	bool saveCalibrationFile(const char* path);
+
+	void useCalibration(bool shouldUse)
+	{
+		_shouldUseCalibration = shouldUse;
+	}
+
 private:
 	PruSpiKeysDriver _driver;
 	std::array<std::vector<float>, 2> _buffers;
 	bool _activeBuffer;
 	BoardsTopology* _bt;
+	std::vector<bool> _calibratingTop;
+	std::vector<bool> _calibratingBottom;
+	std::vector<Calibration*> calibration;
+	bool _shouldUseCalibration;
 };
 
 // notes: 
