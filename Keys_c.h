@@ -18,6 +18,26 @@ void Keys_stop(Keys* that);
 
 float Keys_getNoteValue(Keys* that, int note);
 
+int Keys_loadCalibrationFile(Keys* that, const char* path);
+
+int Keys_saveCalibrationFile(Keys* that, const char* path);
+
+void Keys_startTopCalibration(Keys* that);
+
+int Keys_isTopCalibrationDone(Keys* that);
+
+void Keys_stopTopCalibration(Keys* that);
+
+void Keys_dumpTopCalibration(Keys* that);
+
+void Keys_startBottomCalibration(Keys* that);
+
+void Keys_stopBottomCalibration(Keys* that);
+
+void Keys_dumpBottomCalibration(Keys* that);
+
+void Keys_useCalibration(Keys* that, int shouldUse);
+
 #ifdef __cplusplus
 }
 #endif

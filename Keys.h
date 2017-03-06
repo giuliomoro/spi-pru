@@ -113,6 +113,7 @@ public:
 		{
 			_calibratingBottom[n] = false;
 		}
+		useCalibration(true);
 	}
 
 	bool loadCalibrationFile(const char* path);

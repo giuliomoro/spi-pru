@@ -153,5 +153,6 @@ bool Keys::loadCalibrationFile(const char* path)
 	{
 		return false;
 	}
+	useCalibration(true);
 	return true;
 }

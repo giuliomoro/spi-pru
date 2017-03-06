@@ -41,7 +41,7 @@ int main()
 	}
 	keys.dumpTopCalibration();
 
-	int count = 30;
+	int count = 300;
 	printf("Bottom calibration...");
 	fflush(stdout);
 	keys.startBottomCalibration();
@@ -58,7 +58,7 @@ int main()
 
 	char path[] = "out.txt";
 	keys.saveCalibrationFile(path);
-	keys.useCalibration(true);
+	//keys.useCalibration(true);
 	while(!gShouldStop)
 	{
 		for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
