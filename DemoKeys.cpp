@@ -11,22 +11,22 @@ void catch_function(int signo){
 
 int main()
 {
-	Gpio testGpio;
-	testGpio.open(66, 1);
-	Gpio testGpio2;
-	testGpio2.open(67, 1);
-	Gpio testGpio3;
-	testGpio3.open(69, 1);
+	//Gpio testGpio;
+	//testGpio.open(66, 1);
+	//Gpio testGpio2;
+	//testGpio2.open(67, 1);
+	//Gpio testGpio3;
+	//testGpio3.open(69, 1);
 	signal(SIGINT, catch_function);
 	Keys keys;
 	BoardsTopology bt;
 	// Let's build a topology for just above 5 octaves, A to C
 	bt.setLowestNote(33);
-	//bt.setBoard(0, 0, 24);
+	bt.setBoard(0, 0, 24);
+	bt.setBoard(1, 0, 23);
+	bt.setBoard(2, 0, 23);
+	//bt.setBoard(0, 0, 23);
 	//bt.setBoard(1, 0, 23);
-	//bt.setBoard(2, 9, 23);
-	bt.setBoard(0, 0, 23);
-	bt.setBoard(1, 9, 23);
 	int ret = keys.start(&bt, &gShouldStop);
 	if(ret < 0)
 	{
@@ -41,14 +41,14 @@ int main()
 	}
 	keys.dumpTopCalibration();
 
-	int count = 300;
+	int count = 30000;
 	printf("Bottom calibration...");
 	fflush(stdout);
 	keys.startBottomCalibration();
 	while(!gShouldStop && count--)
 	{
 		for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
-			printf("%2d ", (int)(10 * keys.getNoteValue(n)));
+			printf("%2d ", (int)(100 * keys.getNoteValue(n)));
 		printf("\n");
 		usleep(100000);	
 	}
