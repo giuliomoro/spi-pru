@@ -101,7 +101,8 @@ void Keys::callback(void* obj)
 	// when we are done with updating the new buffer, we 
 	// change the buffer in use.
 	that->_activeBuffer = !that->_activeBuffer;
-
+	if(that->_postCallback)
+		that->_postCallback(that->_buffers[that->_activeBuffer].data(), that->_buffers[that->_activeBuffer].size());
 	return;
 }
 

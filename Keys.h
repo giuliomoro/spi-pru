@@ -25,6 +25,10 @@ public:
 
 	int start(BoardsTopology* bt, volatile int* shouldStop = NULL);
 
+	void setPostCallback(void(*postCallback)(float* buffer, unsigned int length))
+	{
+		_postCallback = postCallback;
+	}
 	/** 
 	 * Receives a new buffer of raw data, converts it 
 	 * and stores it in the inactive internal buffer.
@@ -134,6 +138,7 @@ private:
 	std::vector<bool> _calibratingBottom;
 	std::vector<Calibration*> calibration;
 	bool _shouldUseCalibration;
+	void(*_postCallback)(float* buffer, unsigned int length);
 };
 
 // notes: 
