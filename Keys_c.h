@@ -38,7 +38,7 @@ void Keys_dumpBottomCalibration(Keys* that);
 
 void Keys_useCalibration(Keys* that, int shouldUse);
 
-void Keys_setPostCallback(Keys* that, void(*postCallback)(float*, unsigned int));
+void Keys_setPostCallback(Keys* that, void(*postCallback)(void*, float*, unsigned int), void* arg);
 
 #ifdef __cplusplus
 }

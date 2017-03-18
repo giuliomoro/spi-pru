@@ -16,6 +16,7 @@ public:
 		_buffers()
 		, _activeBuffer(false)
 		, _shouldUseCalibration(false)
+		, _postCallback(NULL)
 	{};
 
 	~Keys()
@@ -25,9 +26,10 @@ public:
 
 	int start(BoardsTopology* bt, volatile int* shouldStop = NULL);
 
-	void setPostCallback(void(*postCallback)(float* buffer, unsigned int length))
+	void setPostCallback(void(*postCallback)(void* arg, float* buffer, unsigned int length), void* arg)
 	{
 		_postCallback = postCallback;
+		_postCallbackArg = arg;
 	}
 	/** 
 	 * Receives a new buffer of raw data, converts it 
@@ -138,7 +140,8 @@ private:
 	std::vector<bool> _calibratingBottom;
 	std::vector<Calibration*> calibration;
 	bool _shouldUseCalibration;
-	void(*_postCallback)(float* buffer, unsigned int length);
+	void(*_postCallback)(void* arg, float* buffer, unsigned int length);
+	void* _postCallbackArg;
 };
 
 // notes: 

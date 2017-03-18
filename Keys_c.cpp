@@ -77,8 +77,8 @@ void Keys_useCalibration(Keys* that, int shouldUse)
 	that->useCalibration(shouldUse);
 }
 
-void Keys_setPostCallback(Keys* that, void(*postCallback)(float*, unsigned int))
+void Keys_setPostCallback(Keys* that, void(*postCallback)(void*, float*, unsigned int), void* arg)
 {
-	that->setPostCallback(postCallback);
+	that->setPostCallback(postCallback, arg);
 }
 

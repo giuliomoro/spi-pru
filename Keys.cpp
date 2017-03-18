@@ -102,7 +102,7 @@ void Keys::callback(void* obj)
 	// change the buffer in use.
 	that->_activeBuffer = !that->_activeBuffer;
 	if(that->_postCallback)
-		that->_postCallback(that->_buffers[that->_activeBuffer].data(), that->_buffers[that->_activeBuffer].size());
+		that->_postCallback(that->_postCallbackArg, that->_buffers[that->_activeBuffer].data(), that->_buffers[that->_activeBuffer].size());
 	return;
 }
 
