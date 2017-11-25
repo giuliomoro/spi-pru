@@ -62,6 +62,7 @@ void Keys::callback(void* obj)
 			}
 			continue;
 		}
+		fprintf(stderr, "Data available for board: %d\n", board);
 		// new data available
 		unsigned int length = lastActiveKey - firstActiveKey + 1;
 		int16_t* boardBufferStart = boardBuffer + firstActiveKey;

@@ -176,22 +176,27 @@ void PruSpiKeysDriver::loop(void* arg)
 			uint32_t receivedCrc;
 			memcpy((void*)&receivedCrc, (void*)&data[paddedLength], 4);
 			uint32_t computedCrc = crc32_bitwise((void*)data, paddedLength >> 2);
+			fprintf(stderr, "Board%d:", n); 
 			if(computedCrc != receivedCrc)
 			{
 				// invalid crc
 				activeBoards = markBoardDisabled(n, activeBoards);
+				fprintf(stderr, "invalid crc\n");
 				continue;
 			}
 			if(frameType == 20)
 			{
 				// empty frame
 				activeBoards = markBoardDisabled(n, activeBoards);
+				fprintf(stderr, "empty frame\n");
 				continue;
 			}
 			if(frameType != 19)
 			{
 				// unknwon frame
 				activeBoards = markBoardDisabled(n, activeBoards);
+				fprintf(stderr, "unknown frame: %d\n", frameType);
+				fprintf(stderr, "unknown frame: %d%d%d%d\n", data[0], data[1], data[2], data[3]);
 				continue;
 			}
 		}
