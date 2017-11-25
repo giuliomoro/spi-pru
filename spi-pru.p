@@ -298,7 +298,7 @@ SET_CURRENT_DEVICE_DONE:
     MOV reg_curr_word, 0
     // preload one word
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
-WRITE_BUFFER_LOOP:
+WRITE_BUFFER_LOOP_TRANSMITTER:
 #ifdef BITBANG_SPI
     BITBANG_SPI_TX_RX reg_curr_word
     ADD reg_transmitted_words, reg_transmitted_words, SPICH0_WL_BYTES
@@ -318,7 +318,7 @@ WRITE_BUFFER_LOOP:
 #endif /* DO_SPI */
 #endif /* BITBANG_SPI */
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
-    QBLT WRITE_BUFFER_LOOP, transmitLength, reg_transmitted_words
+    QBLT WRITE_BUFFER_LOOP_TRANSMITTER, transmitLength, reg_transmitted_words
     
     FINISH_TRANSACTION
     DELAY 100
@@ -334,7 +334,7 @@ WRITE_BUFFER_LOOP:
     MOV reg_curr_word, 0
     // preload one word
     LBBO reg_curr_word, buffer, reg_transmitted_words, SPICH0_WL_BYTES
-WRITE_BUFFER_LOOP:
+WRITE_BUFFER_LOOP_RECEIVER:
 #ifdef BITBANG_SPI
     // we are actually receiving only, so we send out zeros.
     MOV reg_curr_word, 0
@@ -371,7 +371,7 @@ APPLY_DYNAMIC_LENGTH:
     // b) cap it to the requested transmitLength
     MIN transmitLength, reg_curr_word, transmitLength
 CHECK_DYNAMIC_LENGTH_DONE:
-    QBLT WRITE_BUFFER_LOOP, transmitLength, reg_transmitted_words
+    QBLT WRITE_BUFFER_LOOP_RECEIVER, transmitLength, reg_transmitted_words
     QBA RECEIVE_DONE
 RECEIVE_DONE:
     FINISH_TRANSACTION
