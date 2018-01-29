@@ -104,12 +104,14 @@ public:
 			// scale
 			int16_t range = topValue - bottomValue + 1;
 			float outValue;
-			if(range < 100)
-				outValue = 0;
+			if(range < 80 && range > -80)
+				outValue = 1;
 			else 
 				outValue = (inValue - bottomValue) / (float)range;
 			if(outValue < 0)
 				outValue = 0;
+			if(outValue > 1)
+				outValue = 1;
 			out[n] = outValue;
 		}
 	}
