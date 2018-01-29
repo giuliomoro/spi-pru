@@ -15,7 +15,7 @@ CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include $(OPT_FLAGS)
 CPPFLAGS ?= $(CFLAGS) -std=c++11
 LDFLAGS ?= -L/usr/xenomai/lib -L/root/Bela/lib/
 LDLIBS = -lrt -lnative -lxenomai -lprussdrv
-OBJS ?= GPIOcontrol.o Keys.o Boards.o PruSpiKeysDriver.o
+OBJS ?= GPIOcontrol.o Keys.o Boards.o PruSpiKeysDriver.o Gpio.o
 DEMO_OBJS ?= DemoKeys.o $(OBJS)
 TEST_OBJS ?= TestKeys.o $(OBJS)
 OLD_OBJS ?= main.o loader.o $(OBJS)
@@ -84,7 +84,7 @@ $(LIB_SO): $(LIB_OBJS) $(PRU_OBJS)
 	gcc -shared -Wl,-soname,$(LIB_SO) $(LDLIBS) \
     -o $(LIB_SO) $(LIB_OBJS) $(LDFLAGS)
 
-$(LIB_A): $(LIB_OBJS) $(PRU_OBJS) $(LIB_DEPS)
+$(LIB_A): $(LIB_OBJS) $(PRU_OBJS)
 	ar rcs $(LIB_A) $(LIB_OBJS)
 
 -include $(DEMO_DEPS) $(TEST_DEPS) $(OLD_DEPS) $(LIB_DEPS)
