@@ -111,6 +111,8 @@ public:
 			return NULL;
 	}
 
+	bool _debug = false;
+
 private:
 	bool wasDataValid(unsigned int board)
 	{

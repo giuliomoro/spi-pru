@@ -131,6 +131,12 @@ public:
 		_shouldUseCalibration = shouldUse;
 	}
 
+	void setDebug(bool should)
+	{
+		_debug = should;
+		_driver._debug = should;
+	}
+
 private:
 	PruSpiKeysDriver _driver;
 	std::array<std::vector<float>, 2> _buffers;
@@ -142,6 +148,7 @@ private:
 	bool _shouldUseCalibration;
 	void(*_postCallback)(void* arg, float* buffer, unsigned int length);
 	void* _postCallbackArg;
+	bool _debug = false;
 };
 
 // notes: 
