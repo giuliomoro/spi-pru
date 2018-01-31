@@ -72,10 +72,10 @@ public:
 	 */
 	void cleanup();
 
-	int getBuffer()
+	int getActiveBuffer()
 	// inlined for speed
 	{
-		return context->buffer;
+		return pruContext->buffer;
 	}
 
 	uint8_t* getData()
@@ -136,7 +136,8 @@ private:
 	unsigned int _numBoards;
 	void(*_callback)(void*);
 	void* _callbackArg;
-	PruSpiKeysDriverContext* volatile context;
+	PruSpiKeysDriverContext* volatile pruContext;
+	PruSpiKeysDriverContext* context = NULL;
 	uint8_t* buffers[2];
 	const unsigned int _loopTaskPriority = 90;
 	const char* _loopTaskName = "SpiPruKeysDriverTask";

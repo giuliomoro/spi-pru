@@ -1,9 +1,8 @@
 #include <prussdrv.h>
 #include <pruss_intc_mapping.h>
-
 #include "PruSpiKeysDriver.h"
-
 #include <inttypes.h>
+
 static const uint32_t Polynomial = 0x04C11DB7;
 
 static uint32_t crc32_bitwise(const void* data, size_t length)
@@ -65,7 +64,9 @@ int PruSpiKeysDriver::init(unsigned int numBoards)
 		return -1;
 	} 
 	// construct the context object in the pru memory
-	context = (PruSpiKeysDriverContext*) _pruMem;
+	pruContext = (PruSpiKeysDriverContext*) _pruMem;
+	memset(pruContext, 0, sizeof(PruSpiKeysDriverContext));
+	context = new PruSpiKeysDriverContext;
 	memset(context, 0, sizeof(PruSpiKeysDriverContext));
 
 	if(!_pruEnabled)
@@ -131,6 +132,7 @@ void PruSpiKeysDriver::stop()
 
 void PruSpiKeysDriver::cleanup()
 {
+	delete context;
 	_pruMem = NULL;
 	_callback = NULL;
 	if(_pruEnabled)
@@ -145,12 +147,13 @@ void PruSpiKeysDriver::cleanup()
 	}
 }
 
+#define LOCAL_COPY
 void PruSpiKeysDriver::loop(void* arg)
 {
 	PruSpiKeysDriver* that = (PruSpiKeysDriver*)arg;
-	int lastBuffer = that->getBuffer();
+	int lastBuffer = that->getActiveBuffer();
 	while(!that->shouldStop()){
-		int buffer = that->getBuffer();
+		int buffer = that->getActiveBuffer();
 		if(lastBuffer == buffer){
 			rt_task_sleep(300000);
 			continue;
@@ -159,7 +162,20 @@ void PruSpiKeysDriver::loop(void* arg)
 		lastBuffer = buffer;
 		that->_validData = 0;
 
-		int activeBoards = that->context->activeBoards;
+#ifdef LOCAL_COPY
+		int baseOffset = PRU_DATA_BUFFER_SIZE * buffer;
+		for(unsigned int n = 0; n < that->_numBoards; ++n)
+		{
+			int offset = baseOffset + n * PRU_BOARD_BUFFER_SIZE;
+			memcpy(that->context->buffers + offset,
+				that->pruContext->buffers + offset,
+				sizeof(int16_t) * 36);
+		}
+#else /* LOCAL_COPY */
+		that->context = that->pruContext;
+#endif /* LOCAL_COPY */
+
+		int activeBoards = that->pruContext->activeBoards;
 		// int numBoards = __builtin_popcount(activeBoards); // __builtin_popcount returns the number of bits set
 
 		// For each frame of data received, validate CRC and set _validData appropriately
