@@ -15,7 +15,7 @@ int main(int argc, char** argv)
 	const int in = 1;
 	const int out = 2;
 	int inout = noinout;
-	char* path;
+	char* path = NULL;
 	while(++argv, --argc)
 	{
 		printf("arg: %s\n", *argv);
@@ -44,7 +44,7 @@ int main(int argc, char** argv)
 	//testGpio3.open(69, 1);
 	signal(SIGINT, catch_function);
 	Keys keys;
-	keys.setDebug(true);
+	keys.setDebug(false);
 	BoardsTopology bt;
 	// Let's build a topology for just above 5 octaves, A to C
 	bt.setLowestNote(33);
