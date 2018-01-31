@@ -3,6 +3,8 @@
 #include "PruSpiKeysDriver.h"
 #include <inttypes.h>
 
+#define GPIO_DEBUG
+
 static const uint32_t Polynomial = 0x04C11DB7;
 
 static uint32_t crc32_bitwise(const void* data, size_t length)
@@ -150,6 +152,15 @@ void PruSpiKeysDriver::cleanup()
 #define LOCAL_COPY
 void PruSpiKeysDriver::loop(void* arg)
 {
+#ifdef GPIO_DEBUG
+	static bool init = false;
+	static Gpio gpio3;
+	if(!init)
+	{
+		init = true;
+		gpio3.open(89, 1);
+	}
+#endif /* GPIO_DEBUG */
 	PruSpiKeysDriver* that = (PruSpiKeysDriver*)arg;
 	int lastBuffer = that->getActiveBuffer();
 	while(!that->shouldStop()){
@@ -159,6 +170,9 @@ void PruSpiKeysDriver::loop(void* arg)
 			continue;
 		}
 
+#ifdef GPIO_DEBUG
+		gpio3.set();
+#endif /* GPIO_DEBUG */
 		lastBuffer = buffer;
 		that->_validData = 0;
 
@@ -225,5 +239,8 @@ void PruSpiKeysDriver::loop(void* arg)
 
 		that->_validData = activeBoards;
 		that->_callback(that->_callbackArg);
+#ifdef GPIO_DEBUG
+		gpio3.clear();
+#endif /* GPIO_DEBUG */
 	}
 }

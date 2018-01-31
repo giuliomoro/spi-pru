@@ -3,6 +3,9 @@
 #include "Keys.h"
 #include <iostream>
 #include <fstream>
+#include <Gpio.h>
+
+#define GPIO_DEBUG
 
 void Keys::stop()
 {
@@ -38,11 +41,28 @@ int Keys::start(BoardsTopology* bt, volatile int* shouldStop /* = NULL */)
 
 void Keys::callback(void* obj)
 {
+#ifdef GPIO_DEBUG
+	static Gpio gpio0;
+	static Gpio gpio1;
+	static Gpio gpio2;
+	static bool started = false;
+	if(!started)
+	{
+		gpio0.open(86, 1);
+		gpio1.open(88, 1);
+		gpio2.open(87, 1);
+		started = 1;
+	}
+	gpio0.set();
+#endif /* GPIO_DEBUG */
 	Keys* that = (Keys*)obj;
 	PruSpiKeysDriver* driver = &that->_driver;
 	BoardsTopology* bt = that->_bt;
 	float* noteBuffer = that->_buffers[!that->_activeBuffer].data();
 	unsigned int numBoards = bt->getNumBoards();
+#ifdef GPIO_DEBUG
+	gpio1.set();
+#endif /* GPIO_DEBUG */
 	for(int board = numBoards - 1; board >= 0; --board)
 	{
 		int16_t* boardBuffer = driver->getKeysData(board);
@@ -97,14 +117,20 @@ void Keys::callback(void* obj)
 				*o = out;
 			}
 		}
-
-
 	}
+#ifdef GPIO_DEBUG
+	gpio1.clear();
+	gpio2.set();
+#endif /* GPIO_DEBUG */
 	// when we are done with updating the new buffer, we 
 	// change the buffer in use.
 	that->_activeBuffer = !that->_activeBuffer;
 	if(that->_postCallback)
 		that->_postCallback(that->_postCallbackArg, that->_buffers[that->_activeBuffer].data(), that->_buffers[that->_activeBuffer].size());
+#ifdef GPIO_DEBUG
+	gpio2.clear();
+	gpio0.clear();
+#endif /* GPIO_DEBUG */
 	return;
 }
 
