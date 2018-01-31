@@ -7,7 +7,7 @@ OUTPUT_SHARED=DemoKeysShared
 
 #CC=clang
 #CXX=clang++
-OPT_FLAGS ?= -g -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
+OPT_FLAGS ?= -O3 -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
 PRU_OBJS ?= spi-pru.bin
 
 C_OBJS ?= Keys_c.o BoardsTopology_c.o
@@ -50,7 +50,7 @@ $(OUTPUT_LIB): lib DemoKeys.o
 	$(CXX) $(LDFLAGS) -L. -o $(OUTPUT_STATIC) DemoKeys.o $(LIB_A) $(LDLIBS)
 	$(CXX) $(LDFLAGS) -L. -o $(OUTPUT_SHARED) DemoKeys.o -lkeys $(LDLIBS) 
 
-$(OUTPUT): $(DEMO_OBJS)
+$(OUTPUT): $(DEMO_OBJS) $(PRU_OBJS)
 	$(CXX) $(LDFLAGS) -o "$@" $(DEMO_OBJS) $(LDLIBS)
 
 $(OUTPUT_C): $(OBJS) $(C_OBJS) DemoKeys_c.o
