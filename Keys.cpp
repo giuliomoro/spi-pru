@@ -7,6 +7,11 @@
 
 #define GPIO_DEBUG
 
+void Keys::stopAndWait()
+{
+	_driver.stopAndWait();
+}
+
 void Keys::stop()
 {
 	_driver.stop();

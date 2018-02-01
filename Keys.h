@@ -23,6 +23,7 @@ public:
 	{};
 	
 	void stop();
+	void stopAndWait();
 
 	int start(BoardsTopology* bt, volatile int* shouldStop = NULL);
 

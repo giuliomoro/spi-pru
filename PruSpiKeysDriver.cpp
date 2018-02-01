@@ -125,6 +125,11 @@ int PruSpiKeysDriver::start(volatile int* shouldStop, void(*callback)(void*), vo
 	return 1;
 }
 
+void PruSpiKeysDriver::stopAndWait()
+{
+	stop();
+	rt_task_join(&_loopTask);
+}
 void PruSpiKeysDriver::stop()
 {
 	_externalShouldStop = &_shouldStop;
@@ -163,6 +168,7 @@ void PruSpiKeysDriver::loop(void* arg)
 #endif /* GPIO_DEBUG */
 	PruSpiKeysDriver* that = (PruSpiKeysDriver*)arg;
 	int lastBuffer = that->getActiveBuffer();
+	that->_hasStopped = false;
 	while(!that->shouldStop()){
 		int buffer = that->getActiveBuffer();
 		if(lastBuffer == buffer){
@@ -243,4 +249,5 @@ void PruSpiKeysDriver::loop(void* arg)
 		gpio3.clear();
 #endif /* GPIO_DEBUG */
 	}
+	that->_hasStopped = true;
 }

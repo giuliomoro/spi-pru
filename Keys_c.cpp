@@ -16,6 +16,11 @@ int Keys_start(Keys* that, BoardsTopology* bt, volatile int* shouldStop)
 	return that->start(bt, shouldStop);
 }
 
+void Keys_stopAndWait(Keys* that)
+{
+	that->stopAndWait();
+}
+
 void Keys_stop(Keys* that)
 {
 	that->stop();

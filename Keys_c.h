@@ -16,6 +16,8 @@ int Keys_start(Keys* that, BoardsTopology* bt, volatile int* shouldStop);
 
 void Keys_stop(Keys* that);
 
+void Keys_stopAndWait(Keys* that);
+
 float Keys_getNoteValue(Keys* that, int note);
 
 int Keys_loadCalibrationFile(Keys* that, const char* path);

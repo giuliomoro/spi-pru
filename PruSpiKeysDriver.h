@@ -57,6 +57,7 @@ public:
 	 * Stops the PRU loop.
 	 */
 	void stop();
+	void stopAndWait();
 
 	/**
 	 * Checks whether the thread should stop.
@@ -149,5 +150,6 @@ private:
 		67, // P8_08, CS1
 		69  // P8_09, CS2
 	};
+	bool _hasStopped = true;
 };
 #endif /* PRUSPIKEYDRIVER_H_INCLUDED */
