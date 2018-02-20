@@ -7,6 +7,14 @@
 
 #define GPIO_DEBUG
 
+#ifdef PRINT_ONE_KEY
+extern "C"
+{
+	void rt_print_auto_init(int);
+	int rt_printf(const char *format, ...);
+};
+#endif /* PRINT_ONE_KEY */
+
 void Keys::stopAndWait()
 {
 	_driver.stopAndWait();
@@ -19,6 +27,9 @@ void Keys::stop()
 
 int Keys::start(BoardsTopology* bt, volatile int* shouldStop /* = NULL */)
 {
+#ifdef PRINT_ONE_KEY
+	rt_print_auto_init(1);
+#endif /* PRINT_ONE_KEY */
 	stop();
 	// TODO: wait for stop
 
@@ -75,6 +86,10 @@ void Keys::callback(void* obj)
 		int lastActiveKey = bt->getLastActiveKey(board);
 		if(boardBuffer == NULL)
 		{ 
+#ifdef PRINT_ONE_KEY
+			if(board == 0)
+				rt_printf("n ");
+#endif /* PRINT_ONE_KEY */
 			// new data not available at the moment, copy over the old data
 			int currentNote = bt->getLowestNote(board) - bt->getLowestNote();
 			float* oldNoteBuffer = that->_buffers[that->_activeBuffer].data();
@@ -116,6 +131,20 @@ void Keys::callback(void* obj)
 			int16_t* iEnd = boardBuffer + lastActiveKey + 1;
 			for(; i < iEnd; ++i, ++o)
 			{
+#ifdef PRINT_ONE_KEY
+				int note = i - (boardBuffer + firstActiveKey);
+				if(board == 0 && note == 23)
+				{
+					rt_printf("%d ", *i);
+					static int count = 0;
+					count++;
+					if(count == 20)
+					{
+						count = 0;
+						rt_printf("\n");
+					}
+				}
+#endif /* PRINT_ONE_KEY */
 				float out = *i / 4096.f;
 				if(out < 0)
 					out = 0;
