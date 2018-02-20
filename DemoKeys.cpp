@@ -2,11 +2,27 @@
 #include <unistd.h>
 #include <signal.h>
 #include <Gpio.h>
+#include <WriteFile.h>
 
-
+unsigned int gAuxiliaryTaskStackSize  = 1 << 17;
 volatile int gShouldStop = 0;
 void catch_function(int signo){
 	gShouldStop = 1;
+}
+
+BoardsTopology bt;
+WriteFile file;
+
+void postCallback(void* arg, float* buffer, unsigned int length)
+{
+	Keys* keys = (Keys*)arg;
+	unsigned int numKeys = bt.getHighestNote() - bt.getLowestNote() + 1;
+	float values[numKeys];
+	for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
+	{
+		values[n-bt.getLowestNote()] = keys->getNoteValue(n);
+    }
+	file.log(values, numKeys);
 }
 
 int main(int argc, char** argv)
@@ -14,6 +30,7 @@ int main(int argc, char** argv)
 	const int noinout = 0;
 	const int in = 1;
 	const int out = 2;
+	bool lograw = false;
 	int inout = noinout;
 	char* path = NULL;
 	while(++argv, --argc)
@@ -23,6 +40,12 @@ int main(int argc, char** argv)
 			inout = in;
 		if(strcmp(*argv, "out") == 0)
 			inout = out;
+		if(strcmp(*argv, "raw") == 0)
+		{
+			lograw = true;
+			inout = noinout;
+			continue;
+		}
 		if(inout != noinout);
 		{
 			--argc;
@@ -36,6 +59,11 @@ int main(int argc, char** argv)
 			path = *argv;
 		}
 	}
+	if(lograw)
+	{
+		file.init("rawsensors.bin"); //set the file name to write to
+		file.setFileType(kBinary);
+	}
 	//Gpio testGpio;
 	//testGpio.open(66, 1);
 	//Gpio testGpio2;
@@ -45,7 +73,6 @@ int main(int argc, char** argv)
 	signal(SIGINT, catch_function);
 	Keys keys;
 	keys.setDebug(false);
-	BoardsTopology bt;
 	// Let's build a topology for just above 5 octaves, A to C
 	bt.setLowestNote(33);
 	bt.setBoard(0, 0, 24);
@@ -53,6 +80,10 @@ int main(int argc, char** argv)
 	bt.setBoard(2, 0, 23);
 	//bt.setBoard(0, 0, 23);
 	//bt.setBoard(1, 0, 23);
+	if(lograw)
+	{
+		keys.setPostCallback(postCallback, &keys);
+	}
 	int ret = keys.start(&bt, NULL);
 	if(ret < 0)
 	{
