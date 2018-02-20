@@ -183,7 +183,8 @@ void PruSpiKeysDriver::loop(void* arg)
 		that->_validData = 0;
 
 #ifdef LOCAL_COPY
-		int baseOffset = PRU_DATA_BUFFER_SIZE * buffer;
+		that->context->buffer = buffer;
+		int baseOffset = PRU_DATA_BUFFER_SIZE * that->context->buffer;
 		for(unsigned int n = 0; n < that->_numBoards; ++n)
 		{
 			int offset = baseOffset + n * PRU_BOARD_BUFFER_SIZE;
