@@ -42,7 +42,7 @@ C_OBJS ?= Keys_c.o BoardsTopology_c.o
 CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include $(DEFAULT_XENOMAI_CFLAGS) $(OPT_FLAGS)
 CPPFLAGS ?= $(CFLAGS) -std=c++11
 LDFLAGS ?= -L/root/Bela/lib/ 
-LDLIBS = -lbelaextra /root/Bela/lib/libNE10.a -lprussdrv -L/root/Bela/lib $(DEFAULT_XENOMAI_LDFLAGS)
+LDLIBS = -lbelaextra -lNE10 -lprussdrv -L/root/Bela/lib $(DEFAULT_XENOMAI_LDFLAGS)
 OBJS ?= Keys.o Boards.o PruSpiKeysDriver.o 
 DEMO_OBJS ?= DemoKeys.o $(OBJS)
 TEST_OBJS ?= TestKeys.o $(OBJS)
