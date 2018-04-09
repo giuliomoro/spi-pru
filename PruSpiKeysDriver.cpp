@@ -60,12 +60,6 @@ int PruSpiKeysDriver::init(unsigned int numBoards)
 		return (ret);
 	}
 
-	/* Map PRU's INTC */
-	tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
-	prussdrv_pruintc_init(&pruss_intc_initdata);
-
-	prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
-
 	prussdrv_map_prumem (PRU_NUM == 0 ? PRUSS0_PRU0_DATARAM : PRUSS0_PRU1_DATARAM, (void **)&_pruMem);
 	if(_pruMem == NULL){
 		fprintf(stderr, "prussdrv_map_prumem failed\n");
@@ -159,6 +153,11 @@ void PruSpiKeysDriver::cleanup()
 		_pruInited = false;
 	}
 }
+#define PRU_USE_RTDM
+#ifdef PRU_USE_RTDM
+static char rtdm_driver[] = "/dev/rtdm/rtdm_pruss_irq_0";
+static int rtdm_fd;
+#endif
 
 #define LOCAL_COPY
 void PruSpiKeysDriver::loop(void* arg)
@@ -166,21 +165,67 @@ void PruSpiKeysDriver::loop(void* arg)
 #ifdef GPIO_DEBUG
 	static bool init = false;
 	static Gpio gpio3;
+	static Gpio gpio4;
 	if(!init)
 	{
 		init = true;
-		gpio3.open(89, 1);
+		gpio3.open(87, 0); // P8_29
+		gpio4.open(89, 0); // P8_30
 	}
 #endif /* GPIO_DEBUG */
 	PruSpiKeysDriver* that = (PruSpiKeysDriver*)arg;
 	int lastBuffer = that->getActiveBuffer();
 	that->_hasStopped = false;
+#ifdef PRU_USE_RTDM
+	// Open RTDM driver
+	if ((rtdm_fd = __wrap_open(rtdm_driver, O_RDWR)) < 0) {
+		fprintf(stderr, "Failed to open the kernel driver: (%d) %s.\n", errno, strerror(errno));
+		if(errno == EBUSY) // Device or resource busy
+		{
+			fprintf(stderr, "Another program is already running?\n");
+		}
+		if(errno == ENOENT) // No such file or directory
+		{
+			fprintf(stderr, "Maybe try\n  modprobe rtdm_pruss_irq\n?\n");
+		}
+		gShouldStop = 1;
+		return;
+	}
+	int ret = __wrap_read(rtdm_fd, NULL, 0);
+#endif /* PRU_USE_RTDM */
 	while(!that->shouldStop()){
+#ifdef PRU_USE_RTDM
+		int ret = __wrap_read(rtdm_fd, NULL, 0);
+#ifdef GPIO_DEBUG
+		// terminate program if gpio4 is high
+		if(gpio4.read())
+		{
+			gShouldStop = 1;
+			__wrap_close(rtdm_fd);
+			return;
+		}
+#endif /* GPIO_DEBUG */
+		if(ret < 0)
+		{
+			static int interruptTimeoutCount = 0;
+			++interruptTimeoutCount;
+			rt_fprintf(stderr, "SPI PRU interrupt timeout, %d %d %s\n", ret, errno, strerror(errno));
+			if(interruptTimeoutCount >= 5)
+			{
+				fprintf(stderr, "The SPI PRU stopped responding. Quitting.\n");
+				gShouldStop = 1;
+				break;
+			}
+			task_sleep_ns(100000000);
+		}
+#endif /* PRU_USE_RTDM */
 		int buffer = that->getActiveBuffer();
+#ifndef PRU_USE_RTDM
 		if(lastBuffer == buffer){
 			task_sleep_ns(300000);
 			continue;
 		}
+#endif /* PRU_USE_RTDM */
 
 #ifdef GPIO_DEBUG
 		gpio3.set();

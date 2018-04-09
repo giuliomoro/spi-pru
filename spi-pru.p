@@ -379,10 +379,19 @@ RECEIVE_VALIDATION_DONE:
     DELAY 100
 .endm
 
+// See am335x TRM 4.4.1.2.2 Event Interface Mapping (R31): PRU System Events:
+// "The output channels [of R31] 0-15 are connected to the PRU-ICSS INTC system events 16-31, respectively. This allows the PRU to assert one of the system events 16-31 by writing to its own R31 register."
+// We will be writing to output channel 4, which is system event 20 of the PRU-ICSS INTC
+#define PRU_SYSTEM_EVENT_RTDM 20
+#define PRU_SYSTEM_EVENT_RTDM_WRITE_VALUE (1 << 5) | (PRU_SYSTEM_EVENT_RTDM - 16)
+
 .macro SIGNAL_ARM_OVER
     // reset word count to 0
     MOV r27, 0 
     SBCO r27, CONST_PRUDRAM, 0, 4
+    SET r30.t2
+    MOV r31.b0, PRU_SYSTEM_EVENT_RTDM_WRITE_VALUE // Interrupt to ARM
+    CLR r30.t2
 .endm
 
 .macro GET_CYCLE_COUNTER
@@ -522,6 +531,9 @@ SELECT_BUFFER_DONE:
     MOV r27, CURRENT_BUFFER_PTR
     // signal ARM so that it knows where to read from
     SBBO r28, r27, 0, 4
+    SET r30.t2
+    MOV r31.b0, PRU_SYSTEM_EVENT_RTDM_WRITE_VALUE // Interrupt to ARM
+    CLR r30.t2
 
     MOV reg_devices_in_buffer, 0
     // iterate through all the devices
