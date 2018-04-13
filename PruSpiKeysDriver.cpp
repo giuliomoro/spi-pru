@@ -307,7 +307,8 @@ void PruSpiKeysDriver::loop(void* arg)
 		}
 
 		that->_validData = activeBoards;
-		that->_callback(that->_callbackArg);
+		if(that->_callback)
+			that->_callback(that->_callbackArg);
 #ifdef GPIO_DEBUG
 		gpio3.clear();
 #endif /* GPIO_DEBUG */
