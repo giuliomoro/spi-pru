@@ -382,7 +382,7 @@ RECEIVE_VALIDATION_DONE:
 // See am335x TRM 4.4.1.2.2 Event Interface Mapping (R31): PRU System Events:
 // "The output channels [of R31] 0-15 are connected to the PRU-ICSS INTC system events 16-31, respectively. This allows the PRU to assert one of the system events 16-31 by writing to its own R31 register."
 // We will be writing to output channel 4, which is system event 20 of the PRU-ICSS INTC
-#define PRU_SYSTEM_EVENT_RTDM 20
+#define PRU_SYSTEM_EVENT_RTDM 21
 #define PRU_SYSTEM_EVENT_RTDM_WRITE_VALUE (1 << 5) | (PRU_SYSTEM_EVENT_RTDM - 16)
 
 .macro SIGNAL_ARM_OVER

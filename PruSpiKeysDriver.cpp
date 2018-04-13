@@ -3,13 +3,24 @@
 #include "PruSpiKeysDriver.h"
 #include <inttypes.h>
 #include </root/Bela/include/xenomai_wraps.h>
+#include </opt/rtdm_pruss_irq/rtdm_pruss_irq.h>
+
+#define PRU_SYSTEM_EVENT 21
+#define PRU_INTC_CHANNEL 5
+#define PRU_INTC_HOST PRU_INTC_CHANNEL
 // Xenomai-specific includes
 #if XENOMAI_MAJOR == 3
 #include <xenomai/init.h>
 #endif
 extern int gXenomaiInited;
 
+#define LOCAL_COPY
 #define GPIO_DEBUG
+#define PRU_USE_RTDM
+#ifdef PRU_USE_RTDM
+static char rtdm_driver[] = "/dev/rtdm/rtdm_pruss_irq_0";
+static int rtdm_fd;
+#endif
 
 static const uint32_t Polynomial = 0x04C11DB7;
 
@@ -71,19 +82,6 @@ int PruSpiKeysDriver::init(unsigned int numBoards)
 	context = new PruSpiKeysDriverContext;
 	memset(context, 0, sizeof(PruSpiKeysDriverContext));
 
-	if(!_pruEnabled)
-	{
-		if(prussdrv_exec_program (PRU_NUM, "/root/spi-pru/spi-pru.bin"))
-		{
-			fprintf(stderr, "Failed loading spi-pru program\n");
-			return -1;
-		}
-		else 
-		{
-			_pruEnabled = true;
-		}
-	}
-
 	// Initialize the GPIO pins in use for CS and R/W lines
 	for(unsigned int n = 0; n < numGpios; ++n)
 	{
@@ -99,10 +97,7 @@ int PruSpiKeysDriver::start(volatile int* shouldStop, void(*callback)(void*), vo
 	else
 		_externalShouldStop = &_shouldStop;
 
-	if(callback)
-		_callback = callback;
-	else 
-		_callback = NULL;
+	_callback = callback;
 
 	_callbackArg = arg;
 	//printf("TODO: set flag on PRU so that it switches to MASTER_MODE\n");
@@ -115,13 +110,53 @@ int PruSpiKeysDriver::start(volatile int* shouldStop, void(*callback)(void*), vo
 		xenomai_init(&argc, &argv);
 		gXenomaiInited = 1;
 	}
-	int ret = create_and_start_thread(&_loopTask, _loopTaskName, _loopTaskPriority, 0, (pthread_callback_t*)loop, (void*)this);
+	int ret;
+#ifdef PRU_USE_RTDM
+	// Open RTDM driver
+	if ((rtdm_fd = __wrap_open(rtdm_driver, O_RDWR)) < 0) {
+		fprintf(stderr, "Failed to open the kernel driver: (%d) %s.\n", errno, strerror(errno));
+		if(errno == EBUSY) // Device or resource busy
+		{
+			fprintf(stderr, "Another program is already running?\n");
+		}
+		if(errno == ENOENT) // No such file or directory
+		{
+			fprintf(stderr, "Maybe try\n  modprobe rtdm_pruss_irq\n?\n");
+		}
+		gShouldStop = 1;
+		return -1;
+	}
+	ret = __wrap_ioctl(rtdm_fd, RTDM_PRUSS_IRQ_REGISTER, PRU_SYSTEM_EVENT);
+	if(ret)
+	{
+		fprintf(stderr, "ioctl failed: %d %s\n", -ret, strerror(-ret));
+		return -1;
+	}
+#endif /* PRU_USE_RTDM */
+	ret = create_and_start_thread(&_loopTask, _loopTaskName, _loopTaskPriority, 0, (pthread_callback_t*)loop, (void*)this);
 	if(ret)
 	{
 		fprintf(stderr, "Failed to create thread: %d\n", ret);
-		return 0;
+		return -1;
 	}
 
+	if(!_pruInited)
+	{
+		fprintf(stderr, "PRU not inited\n");
+		return -1;
+	}
+	if(!_pruEnabled)
+	{
+		if(prussdrv_exec_program (PRU_NUM, "/root/spi-pru/spi-pru.bin"))
+		{
+			fprintf(stderr, "Failed loading spi-pru program\n");
+			return -1;
+		}
+		else
+		{
+			_pruEnabled = true;
+		}
+	}
 	return 1;
 }
 
@@ -134,7 +169,6 @@ void PruSpiKeysDriver::stop()
 {
 	_externalShouldStop = &_shouldStop;
 	_shouldStop = true;
-	_callback = NULL;
 }
 
 void PruSpiKeysDriver::cleanup()
@@ -153,56 +187,33 @@ void PruSpiKeysDriver::cleanup()
 		_pruInited = false;
 	}
 }
-#define PRU_USE_RTDM
-#ifdef PRU_USE_RTDM
-static char rtdm_driver[] = "/dev/rtdm/rtdm_pruss_irq_0";
-static int rtdm_fd;
-#endif
 
-#define LOCAL_COPY
 void PruSpiKeysDriver::loop(void* arg)
 {
 #ifdef GPIO_DEBUG
 	static bool init = false;
+	int ret;
 	static Gpio gpio3;
 	static Gpio gpio4;
 	if(!init)
 	{
 		init = true;
-		gpio3.open(87, 0); // P8_29
+		gpio3.open(87, 1); // P8_29
 		gpio4.open(89, 0); // P8_30
 	}
 #endif /* GPIO_DEBUG */
 	PruSpiKeysDriver* that = (PruSpiKeysDriver*)arg;
 	int lastBuffer = that->getActiveBuffer();
 	that->_hasStopped = false;
-#ifdef PRU_USE_RTDM
-	// Open RTDM driver
-	if ((rtdm_fd = __wrap_open(rtdm_driver, O_RDWR)) < 0) {
-		fprintf(stderr, "Failed to open the kernel driver: (%d) %s.\n", errno, strerror(errno));
-		if(errno == EBUSY) // Device or resource busy
-		{
-			fprintf(stderr, "Another program is already running?\n");
-		}
-		if(errno == ENOENT) // No such file or directory
-		{
-			fprintf(stderr, "Maybe try\n  modprobe rtdm_pruss_irq\n?\n");
-		}
-		gShouldStop = 1;
-		return;
-	}
-	int ret = __wrap_read(rtdm_fd, NULL, 0);
-#endif /* PRU_USE_RTDM */
 	while(!that->shouldStop()){
 #ifdef PRU_USE_RTDM
-		int ret = __wrap_read(rtdm_fd, NULL, 0);
+		static int count = 0;
+		ret = __wrap_read(rtdm_fd, NULL, 0);
 #ifdef GPIO_DEBUG
 		// terminate program if gpio4 is high
-		if(gpio4.read())
+		while(!gShouldStop && gpio4.read())
 		{
-			gShouldStop = 1;
-			__wrap_close(rtdm_fd);
-			return;
+			usleep(100000);
 		}
 #endif /* GPIO_DEBUG */
 		if(ret < 0)
