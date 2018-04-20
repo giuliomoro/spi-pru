@@ -20,18 +20,20 @@ public:
 	{};
 
 	~Keys()
-	{};
+	{
+		for(auto cal : calibration)
+		{
+			delete cal;
+		}
+	};
 	
 	void stop();
 	void stopAndWait();
 
 	int start(BoardsTopology* bt, volatile int* shouldStop = NULL);
 
-	void setPostCallback(void(*postCallback)(void* arg, float* buffer, unsigned int length), void* arg)
-	{
-		_postCallback = postCallback;
-		_postCallbackArg = arg;
-	}
+	void setPostCallback(void(*postCallback)(void* arg, float* buffer, unsigned int length), void* arg);
+
 	/** 
 	 * Receives a new buffer of raw data, converts it 
 	 * and stores it in the inactive internal buffer.
@@ -39,6 +41,7 @@ public:
 	 */
 	static void callback(void* obj);
 
+	// inlined for speed
 	float getNoteValue(int note)
 	{
 		int lowestNote = _bt->getLowestNote();
@@ -54,85 +57,27 @@ public:
 
 	void setTimeResolution(unsigned int milliseconds);
 
-	void startTopCalibration()
-	{
-		for(auto cal : calibration)
-			delete cal;
-		for(unsigned int n = 0; n < _bt->getNumBoards(); ++n)
-		{
-			int numKeys = _bt->getLastActiveKey(n) - _bt->getFirstActiveKey(n) + 1;
-			calibration[n] = new Calibration(numKeys);
-			_calibratingTop[n] = true;
-		}
-	}
+	void startTopCalibration();
 
-	bool isTopCalibrationDone()
-	{
-		for(unsigned int n = 0; n < _calibratingTop.size(); ++n)
-		{
-			if(_calibratingTop[n])
-				return false;
-		}
-		return true;
-	}
+	bool isTopCalibrationDone();
 
-	void stopTopCalibration()
-	{
-		for(unsigned int n = 0; n < _calibratingTop.size(); ++n)
-		{
-			_calibratingTop[n] = false;
-		}
-	}
+	void stopTopCalibration();
 
-	void dumpTopCalibration()
-	{
-		for(int n = _bt->getNumBoards() - 1; n >= 0; --n)
-		{
-			calibration[n]->dumpTopCalibration(_bt->getLowestNote(n));
-		}
-	}
+	void dumpTopCalibration();
 
-	void dumpBottomCalibration()
-	{
-		for(int n = _bt->getNumBoards() - 1; n >= 0; n--)
-		{
-			calibration[n]->dumpBottomCalibration(_bt->getLowestNote(n));
-		}
-	}
+	void dumpBottomCalibration();
 
-	void startBottomCalibration()
-	{
-		unsigned int numBoards = _bt->getNumBoards();
-		for(unsigned int n = 0; n < numBoards; ++n)
-		{
-			calibration[n]->startBottomCalibration();
-			_calibratingBottom[n] = true;
-		}
-	}
+	void startBottomCalibration();
 
-	void stopBottomCalibration()
-	{
-		for(unsigned int n = 0; n < _calibratingBottom.size(); ++n)
-		{
-			_calibratingBottom[n] = false;
-		}
-		useCalibration(true);
-	}
+	void stopBottomCalibration();
 
 	bool loadCalibrationFile(const char* path);
 
 	bool saveCalibrationFile(const char* path);
 
-	void useCalibration(bool shouldUse)
-	{
-		_shouldUseCalibration = shouldUse;
-	}
+	void useCalibration(bool shouldUse);
 
-	void setDebug(bool should)
-	{
-		_debug = should;
-		_driver._debug = should;
-	}
+	void setDebug(bool should);
 
 private:
 	PruSpiKeysDriver _driver;

@@ -64,6 +64,76 @@ int Keys::start(BoardsTopology* bt, volatile int* shouldStop /* = NULL */)
 	return 1;
 }
 
+void Keys::setPostCallback(void(*postCallback)(void* arg, float* buffer, unsigned int length), void* arg)
+{
+	_postCallback = postCallback;
+	_postCallbackArg = arg;
+}
+
+void Keys::startTopCalibration()
+{
+	for(auto cal : calibration)
+		delete cal;
+	for(unsigned int n = 0; n < _bt->getNumBoards(); ++n)
+	{
+		int numKeys = _bt->getLastActiveKey(n) - _bt->getFirstActiveKey(n) + 1;
+		calibration[n] = new Calibration(numKeys);
+		_calibratingTop[n] = true;
+	}
+}
+
+bool Keys::isTopCalibrationDone()
+{
+	for(unsigned int n = 0; n < _calibratingTop.size(); ++n)
+	{
+		if(_calibratingTop[n])
+			return false;
+	}
+	return true;
+}
+
+void Keys::stopTopCalibration()
+{
+	for(unsigned int n = 0; n < _calibratingTop.size(); ++n)
+	{
+		_calibratingTop[n] = false;
+	}
+}
+
+void Keys::dumpTopCalibration()
+{
+	for(int n = _bt->getNumBoards() - 1; n >= 0; --n)
+	{
+		calibration[n]->dumpTopCalibration(_bt->getLowestNote(n));
+	}
+}
+
+void Keys::dumpBottomCalibration()
+{
+	for(int n = _bt->getNumBoards() - 1; n >= 0; n--)
+	{
+		calibration[n]->dumpBottomCalibration(_bt->getLowestNote(n));
+	}
+}
+
+void Keys::startBottomCalibration()
+{
+	unsigned int numBoards = _bt->getNumBoards();
+	for(unsigned int n = 0; n < numBoards; ++n)
+	{
+		calibration[n]->startBottomCalibration();
+		_calibratingBottom[n] = true;
+	}
+}
+
+void Keys::stopBottomCalibration()
+{
+	for(unsigned int n = 0; n < _calibratingBottom.size(); ++n)
+	{
+		_calibratingBottom[n] = false;
+	}
+	useCalibration(true);
+}
 void Keys::callback(void* obj)
 {
 #ifdef GPIO_DEBUG
@@ -227,4 +297,14 @@ bool Keys::loadCalibrationFile(const char* path)
 	}
 	useCalibration(true);
 	return true;
+}
+void Keys::useCalibration(bool shouldUse)
+{
+	_shouldUseCalibration = shouldUse;
+}
+
+void Keys::setDebug(bool should)
+{
+	_debug = should;
+	_driver._debug = should;
 }
