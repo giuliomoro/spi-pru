@@ -22,7 +22,7 @@ float Keys_getNoteValue(Keys* that, int note);
 
 int Keys_loadCalibrationFile(Keys* that, const char* path);
 
-int Keys_saveCalibrationFile(Keys* that, const char* path);
+int Keys_saveLinearCalibrationFile(Keys* that, const char* path);
 
 void Keys_startTopCalibration(Keys* that);
 

@@ -7,6 +7,25 @@ void Board::setKeys(unsigned int firstActiveKey, unsigned int lastActiveKey, uns
 	_lowestNote = lowestNote;
 }
 
+int Board::getLowestNote()
+{
+	return _lowestNote;
+}
+
+int Board::getHighestNote()
+{
+	return _lowestNote + _lastActiveKey - _firstActiveKey;
+}
+
+int Board::getKey(unsigned int note)
+{
+	if(note < _lowestNote)
+		return -1;
+	if(note > (unsigned int)getHighestNote())
+		return -2;
+	return note - getLowestNote();
+}
+
 int Board::getNote(unsigned int key)
 {
 	if(key < _firstActiveKey)
@@ -103,3 +122,25 @@ unsigned int BoardsTopology::getLastActiveKey(unsigned int board)
 	return indexes[board * numIndexesPerBoard + 1];
 }
 
+int BoardsTopology::findBoardFromNote(unsigned int note)
+{
+	int board = -1;
+	for(unsigned int n = 0; n < getNumBoards(); ++n)
+	{
+		int key = boards[n]->getKey(note);
+		if(key >= 0) // key belongs to this board
+		{
+			board = n;
+			break;
+		}
+	}
+	return board;
+}
+
+int BoardsTopology::findKeyFromNote(unsigned int note)
+{
+	int board = findBoardFromNote(note);
+	if(board < 0)
+		return -1;
+	return boards[board]->getKey(note);
+}

@@ -2,15 +2,37 @@
 #define CALIBRATE_H_INCLUDED
 #include <vector>
 #include <limits>
-
+#include <iostream>
+#include <string.h>
+#define inv 1
 class Calibration
 {
 public:
 	Calibration(int numKeys) :
 		topCalibrationCount(0),
+		calibrationType(0),
 		top(numKeys),
 		bottom(numKeys)
-	{}
+#if inv
+		,
+		inverseSquareParams(numKeys)
+#endif
+	{
+		std::cout << top.data() << " " << bottom.data() << " " 
+#if inv
+			<< inverseSquareParams.data() 
+#endif
+			<< "\n";
+	}
+
+	~Calibration()
+	{
+		std::cout << top.data() << " " << bottom.data() << " " 
+#if inv
+			<< inverseSquareParams.data() 
+#endif
+			<< "\n";
+	}
 
 	void calibrateTop(int16_t* buffer, int length)
 	{
@@ -34,8 +56,11 @@ public:
 		}
 	}
 
+	void setInverseSquareParams(unsigned int position, int32_t topValue, int16_t bottomValue, float a, float b, float c);
+
 	void set(unsigned int position, int32_t topValue, int16_t bottomValue)
 	{
+		calibrationType = kLinearCalibration;
 		top[position] = topValue;
 		bottom[position] = bottomValue;
 	}
@@ -96,31 +121,85 @@ public:
 
 	void apply(float* out, int16_t* in, unsigned int length)
 	{
-		for(unsigned int n = 0; n < length; ++n)
+		return;
+#if inv
+		if(calibrationType == kLinearCalibration)
 		{
-			int16_t inValue = in[n];
-			int32_t topValue = top[n];
-			int16_t bottomValue = bottom[n];
-			// scale
-			int16_t range = topValue - bottomValue + 1;
-			float outValue;
-			if(range < 80 && range > -80)
-				outValue = 1;
-			else 
-				outValue = (inValue - bottomValue) / (float)range;
-			if(outValue < 0)
-				outValue = 0;
-			if(outValue > 1)
-				outValue = 1;
-			out[n] = outValue;
+			for(unsigned int n = 0; n < length; ++n)
+			{
+				int16_t inValue = in[n];
+				int32_t topValue = top[n];
+				int16_t bottomValue = bottom[n];
+				// scale
+				int16_t range = topValue - bottomValue + 1;
+				float outValue;
+				if(range < 80 && range > -80)
+					outValue = 1;
+				else 
+					outValue = (inValue - bottomValue) / (float)range;
+				if(outValue < 0)
+					outValue = 0;
+				if(outValue > 1)
+					outValue = 1;
+				out[n] = outValue;
+			}
 		}
+		else if (calibrationType == kInverseSquareCalibration)
+		{
+			for(unsigned int n = 0; n < length; ++n)
+			{
+				static const int16_t keyNotAtRestThreshold = 30;
+				int16_t inValue = in[n];
+				int32_t topValue = top[n];
+				int16_t bottomValue = bottom[n];
+				float a = inverseSquareParams[n].a;
+				float b = inverseSquareParams[n].b;
+				float c = inverseSquareParams[n].c;
+				// scale
+				int16_t range = topValue - bottomValue + 1;
+				if(range < 80 && range > -80)
+				{
+					out[n] = 1;
+					continue;
+				}
+				else if(!(topValue - inValue > keyNotAtRestThreshold))
+				{
+					// we check if the key is far enough from the rest position.
+					// we do this with the linear sensor reading to avoid computing the
+					// inverse square for all the keys and save some CPU
+					out[n] = 1;
+					continue;
+				}
+
+				float outValue;
+				float x = inValue / 4096.f;
+				outValue =  a / (x * x + b) + c;
+				// clip value to range before writing
+				if(outValue < 0)
+					outValue = 0;
+				if(outValue > 1)
+					outValue = 1;
+				out[n] = outValue;
+			}
+		}
+#endif
 	}
 
 private:
 	int topCalibrationCount;
 	int bottomCalibrationCount;
+	int calibrationType;
 	std::vector<int32_t> top;
 	std::vector<int16_t> bottom;
+#if inv
+	typedef struct _InverseSquareCalibParams
+	{
+		float a;
+		float b;
+		float c;
+	} InverseSquareParams;
+	std::vector<InverseSquareParams> inverseSquareParams;
+#endif
 	const int topCalibrateMax = 30;
 
 	void initBottomCalibration()
@@ -133,6 +212,12 @@ private:
 	{
 		memset(top.data(), 0, sizeof(top[0])*top.size());
 	}
+
+	enum
+	{
+		kLinearCalibration,
+		kInverseSquareCalibration,
+	};
 };
 
 #endif /* CALIBRATE_H_INCLUDED */

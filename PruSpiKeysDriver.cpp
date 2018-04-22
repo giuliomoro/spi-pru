@@ -207,7 +207,6 @@ void PruSpiKeysDriver::loop(void* arg)
 	that->_hasStopped = false;
 	while(!that->shouldStop()){
 #ifdef PRU_USE_RTDM
-		static int count = 0;
 		ret = __wrap_read(rtdm_fd, NULL, 0);
 #ifdef GPIO_DEBUG
 		// terminate program if gpio4 is high

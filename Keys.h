@@ -71,9 +71,10 @@ public:
 
 	void stopBottomCalibration();
 
-	bool loadCalibrationFile(const char* path);
+	bool loadInverseSquareCalibrationFile(const char* path);
+	//bool loadCalibrationFile(const char* path);
 
-	bool saveCalibrationFile(const char* path);
+	bool saveLinearCalibrationFile(const char* path);
 
 	void useCalibration(bool shouldUse);
 

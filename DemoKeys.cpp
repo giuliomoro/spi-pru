@@ -26,6 +26,16 @@ void postCallback(void* arg, float* buffer, unsigned int length)
 	file.log(values, numKeys);
 }
 
+void usage()
+{
+	printf(
+			"raw         : log raw values as they come in from the sensor to rawsensors.bin"
+			"in <path>   : load inverse square calibration file from <path> and display calibrated values "
+			"out <path>  : generates file  <path> with key top and key bottom values. "
+			"              make sure no key is been pressed. Start, wait for key values for be displayed"
+                        "              and then start pressing all keys. Hit ctrl-C when done. Once done, will display"
+			"              normalized readings.");
+}
 int main(int argc, char** argv)
 {
 	const int noinout = 0;
@@ -37,6 +47,11 @@ int main(int argc, char** argv)
 	while(++argv, --argc)
 	{
 		printf("arg: %s\n", *argv);
+		if(strcmp(*argv, "--help") == 0)
+		{
+			usage();
+			return 0;
+		}
 		if(strcmp(*argv, "in") == 0)
 			inout = in;
 		if(strcmp(*argv, "out") == 0)
@@ -108,11 +123,10 @@ int main(int argc, char** argv)
 		printf("done\n");
 		keys.dumpTopCalibration();
 	
-		int count = 30000;
 		printf("Bottom calibration...");
 		fflush(stdout);
 		keys.startBottomCalibration();
-		while(!gShouldStop && count--)
+		while(!gShouldStop)
 		{
 			printf("bot calib ");
 			for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
@@ -125,13 +139,13 @@ int main(int argc, char** argv)
 		keys.stopBottomCalibration();
 		keys.dumpBottomCalibration();
 	
-		keys.saveCalibrationFile(path);
+		keys.saveLinearCalibrationFile(path);
 	}
 	if(inout == in)
 	{
 		keys.startTopCalibration();
 		printf("Loading calibration file %s\n", path);
-		keys.loadCalibrationFile(path);
+		keys.loadInverseSquareCalibrationFile(path);
 	}
 	if(inout == noinout)
 	{

@@ -11,6 +11,10 @@ public:
 	
 	void setKeys(unsigned int firstActiveKey, unsigned int lastActiveKey, unsigned int lowestNote);
 
+	int getKey(unsigned int note);
+
+	int getLowestNote();
+	int getHighestNote();
 	int getNote(unsigned int key);
 
 	unsigned int getLastActiveKey();
@@ -76,6 +80,8 @@ public:
 		return boards[board]->getNote(getLastActiveKey(board));
 	}
 
+	int findBoardFromNote(unsigned int note);
+	int findKeyFromNote(unsigned int note);
 private:
 	void deallocBoard(unsigned int boardPosition);
 	void deallocBoards();

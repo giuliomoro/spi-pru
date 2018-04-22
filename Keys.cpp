@@ -247,7 +247,7 @@ void Keys::callback(void* obj)
 	return;
 }
 
-bool Keys::saveCalibrationFile(const char* path)
+bool Keys::saveLinearCalibrationFile(const char* path)
 {
 	// format: [note#] [board] [top] [bottom]
 	std::ofstream file;
@@ -265,7 +265,55 @@ bool Keys::saveCalibrationFile(const char* path)
 	return true;
 }
 
-bool Keys::loadCalibrationFile(const char* path)
+bool Keys::loadInverseSquareCalibrationFile(const char* path)
+{
+	// format: [note#] [top] [bottom] [a] [b] [c] 
+	// where a, b, c are the parameters of the
+	// inverted square function: y = a/(b + x^2) + c
+	stopTopCalibration();
+	stopBottomCalibration();
+	std::ifstream inputFile;
+	try
+	{
+		inputFile.open(path);
+		if(inputFile.fail())
+		{
+			return false;
+		}
+		while(!inputFile.eof())
+		{
+			unsigned int note;
+			float top, bottom;
+			float a, b, c;
+			inputFile >> note;
+			inputFile >> top;
+			inputFile >> bottom;
+			inputFile >> a;
+			inputFile >> b;
+			inputFile >> c;
+			if(inputFile.fail())
+				break; // in case we went past end of file anyhow
+			int board = _bt->findBoardFromNote(note);
+			int key = _bt->findKeyFromNote(note);
+			if(board >= 0 && key >= 0)
+			{
+				std::cout << "Calibration line found for: note " << note << ". key:" << key << ", board:" << board <<  ", top:" <<  top << ", bottom:" << bottom << ", a: " << a << ", b: " << b << ", c:" << c << "\n";
+				calibration[board]->setInverseSquareParams(key, top * 4096, bottom * 4096, a, b, c);
+			}
+			else
+				std::cerr << "Note " << note << ", board" << board << ", key " << key << " is outside the range of the board topology\n";
+		}
+	}
+	catch(...)
+	{
+		std::cerr << "Error opening calibration file " << path << "\n";
+		return false;
+	}
+	useCalibration(true);
+	return true;
+}
+/*
+bool Keys::loadLinearCalibrationFile(const char* path)
 {
 	// format: [note#] [board] [top] [bottom]
 	stopTopCalibration();
@@ -298,6 +346,7 @@ bool Keys::loadCalibrationFile(const char* path)
 	useCalibration(true);
 	return true;
 }
+*/
 void Keys::useCalibration(bool shouldUse)
 {
 	_shouldUseCalibration = shouldUse;
