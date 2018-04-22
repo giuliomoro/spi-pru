@@ -29,6 +29,7 @@ void postCallback(void* arg, float* buffer, unsigned int length)
 void usage()
 {
 	printf(
+			"single <note> : only display full-precision value for the given key"
 			"raw         : log raw values as they come in from the sensor to rawsensors.bin"
 			"in <path>   : load inverse square calibration file from <path> and display calibrated values "
 			"out <path>  : generates file  <path> with key top and key bottom values. "
@@ -36,11 +37,13 @@ void usage()
                         "              and then start pressing all keys. Hit ctrl-C when done. Once done, will display"
 			"              normalized readings.");
 }
+
 int main(int argc, char** argv)
 {
 	const int noinout = 0;
 	const int in = 1;
 	const int out = 2;
+	int singleKey = -1;
 	bool lograw = false;
 	int inout = noinout;
 	char* path = NULL;
@@ -52,28 +55,33 @@ int main(int argc, char** argv)
 			usage();
 			return 0;
 		}
-		if(strcmp(*argv, "in") == 0)
-			inout = in;
-		if(strcmp(*argv, "out") == 0)
-			inout = out;
+		if(strcmp(*argv, "single") == 0)
+		{
+			--argc;
+			++argv;
+			singleKey = atoi(*argv);
+			printf("singleKey: %d\n", singleKey);
+			continue;
+		}
 		if(strcmp(*argv, "raw") == 0)
 		{
 			lograw = true;
 			inout = noinout;
 			continue;
 		}
-		if(inout != noinout)
+		if(strcmp(*argv, "in") == 0)
+			inout = in;
+		if(strcmp(*argv, "out") == 0)
+			inout = out;
+		--argc;
+		++argv;
+		printf("subarg: %s\n", *argv);
+		if(argc < 0)
 		{
-			--argc;
-			++argv;
-			printf("subarg: %s\n", *argv);
-			if(argc < 0)
-			{
-				fprintf(stderr, "You need to pass a filename after \"in\" or \"out\"");
-				exit(1);
-			}
-			path = *argv;
+			fprintf(stderr, "You need to pass a filename after \"in\" or \"out\"");
+			exit(1);
 		}
+		path = *argv;
 	}
 	if(lograw)
 	{
@@ -155,10 +163,18 @@ int main(int argc, char** argv)
 	}
 	while(!gShouldStop)
 	{
-		for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
-			printf("%X ", (int)(10 * keys.getNoteValue(n)));
-		printf("\n");
-		usleep(100000);	
+		if(singleKey >= 0)
+		{
+			printf("%.4f\n", keys.getNoteValue(singleKey));
+			usleep(30000);	
+		}
+		else
+		{
+			for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
+				printf("%X ", (int)(10 * keys.getNoteValue(n)));
+			printf("\n");
+			usleep(100000);	
+		}
 	}
 	keys.stop();
 	
