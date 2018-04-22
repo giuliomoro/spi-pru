@@ -6,7 +6,7 @@ OUTPUT=DemoKeys
 
 #CC=clang
 #CXX=clang++
-OPT_FLAGS ?= -g -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
+OPT_FLAGS ?= -O3 -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
 PRU_OBJS ?= spi-pru.bin
 
 XENO_CONFIG=/usr/xenomai/bin/xeno-config
@@ -41,7 +41,7 @@ C_OBJS ?= Keys_c.o BoardsTopology_c.o
 CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include $(DEFAULT_XENOMAI_CFLAGS) $(OPT_FLAGS)
 CPPFLAGS ?= $(CFLAGS) -std=c++11
 LDFLAGS ?= -L/root/Bela/lib/ 
-LDLIBS = -lbelaextra -lNE10 -lprussdrv -L/root/Bela/lib $(DEFAULT_XENOMAI_LDFLAGS)
+LDLIBS = -lbelaextra -lNE10 -lmathneon -lprussdrv -L/root/Bela/lib $(DEFAULT_XENOMAI_LDFLAGS)
 OBJS ?= Keys.o Boards.o PruSpiKeysDriver.o Calibrate.o
 DEMO_OBJS ?= DemoKeys.o $(OBJS)
 TEST_OBJS ?= TestKeys.o $(OBJS)
