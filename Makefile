@@ -110,8 +110,8 @@ test-lib: lib $(TEST_BINS)
 lib: $(LIB_SO) $(LIB_A)
 
 $(LIB_SO): $(LIB_OBJS) $(PRU_OBJS)
-	gcc -shared -Wl,-soname,$(LIB_SO) $(LDLIBS) \
-    -o $(LIB_SO) $(LIB_OBJS) $(LDFLAGS)
+	gcc -shared -Wl,-soname,$(LIB_SO) \
+    -o $(LIB_SO) $(LIB_OBJS) $(LDFLAGS) $(LDLIBS)
 
 $(LIB_A): $(LIB_OBJS) $(PRU_OBJS)
 	ar rcs $(LIB_A) $(LIB_OBJS)
