@@ -4,7 +4,7 @@
 #include <limits>
 #include <iostream>
 #include <string.h>
-#define inv 1
+
 class Calibration
 {
 public:
@@ -13,24 +13,18 @@ public:
 		calibrationType(0),
 		top(numKeys),
 		bottom(numKeys)
-#if inv
 		,
 		inverseSquareParams(numKeys)
-#endif
 	{
 		std::cout << top.data() << " " << bottom.data() << " " 
-#if inv
 			<< inverseSquareParams.data() 
-#endif
 			<< "\n";
 	}
 
 	~Calibration()
 	{
 		std::cout << top.data() << " " << bottom.data() << " " 
-#if inv
 			<< inverseSquareParams.data() 
-#endif
 			<< "\n";
 	}
 
@@ -121,8 +115,6 @@ public:
 
 	void apply(float* out, int16_t* in, unsigned int length)
 	{
-		return;
-#if inv
 		if(calibrationType == kLinearCalibration)
 		{
 			for(unsigned int n = 0; n < length; ++n)
@@ -182,7 +174,6 @@ public:
 				out[n] = outValue;
 			}
 		}
-#endif
 	}
 
 private:
@@ -191,7 +182,6 @@ private:
 	int calibrationType;
 	std::vector<int32_t> top;
 	std::vector<int16_t> bottom;
-#if inv
 	typedef struct _InverseSquareCalibParams
 	{
 		float a;
@@ -199,7 +189,6 @@ private:
 		float c;
 	} InverseSquareParams;
 	std::vector<InverseSquareParams> inverseSquareParams;
-#endif
 	const int topCalibrateMax = 30;
 
 	void initBottomCalibration()
