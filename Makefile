@@ -1,13 +1,12 @@
 BELA_PATH?=/root/Bela
 OUTPUT_C=DemoKeys_c
-OUTPUT=DemoKeys
-OUTPUT_LIB=libbed
 OUTPUT_STATIC=DemoKeysStatic
 OUTPUT_SHARED=DemoKeysShared
+OUTPUT=DemoKeys
 
 #CC=clang
 #CXX=clang++
-OPT_FLAGS ?= -O3 -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
+OPT_FLAGS ?= -g -march=armv7-a -mtune=cortex-a8 -mfloat-abi=hard -mfpu=neon -ftree-vectorize -DNDEBUG -Wall -U_FORTIFY_SOURCE
 PRU_OBJS ?= spi-pru.bin
 
 XENO_CONFIG=/usr/xenomai/bin/xeno-config
@@ -43,7 +42,7 @@ CFLAGS ?= -I/usr/xenomai/include -I$(BELA_PATH)/include $(DEFAULT_XENOMAI_CFLAGS
 CPPFLAGS ?= $(CFLAGS) -std=c++11
 LDFLAGS ?= -L/root/Bela/lib/ 
 LDLIBS = -lbelaextra -lNE10 -lprussdrv -L/root/Bela/lib $(DEFAULT_XENOMAI_LDFLAGS)
-OBJS ?= Keys.o Boards.o PruSpiKeysDriver.o 
+OBJS ?= Keys.o Boards.o PruSpiKeysDriver.o Calibrate.o
 DEMO_OBJS ?= DemoKeys.o $(OBJS)
 TEST_OBJS ?= TestKeys.o $(OBJS)
 OLD_OBJS ?= main.o loader.o $(OBJS)
@@ -59,7 +58,7 @@ LIB_DEPS := $(notdir $(LIB_OBJS:.o=.d))
 TEST_BINS ?= TestKeys test_keys_c
 OLD = main
 
-all: $(PRU_OBJS) $(OUTPUT)
+all: $(PRU_OBJS) $(OUTPUT_SHARED) $(LIB_SO)
 
 spi-pru: $(OLD) $(PRU_OBJS)
 	@#an empty recipe
@@ -74,8 +73,10 @@ Keys.o: Keys.h
 TestKeys.o: Keys.h
 DemoKeys.o: Keys.h
 
-$(OUTPUT_LIB): lib DemoKeys.o
+$(OUTPUT_STATIC): $(LIB_A)
 	$(CXX) $(LDFLAGS) -L. -o $(OUTPUT_STATIC) DemoKeys.o $(LIB_A) $(LDLIBS)
+
+$(OUTPUT_SHARED): DemoKeys.o
 	$(CXX) $(LDFLAGS) -L. -o $(OUTPUT_SHARED) DemoKeys.o -lkeys $(LDLIBS) 
 
 $(OUTPUT): $(DEMO_OBJS) $(PRU_OBJS)
