@@ -97,8 +97,8 @@ int main(int argc, char** argv)
 	signal(SIGINT, catch_function);
 	Keys keys;
 	keys.setDebug(false);
-	// Let's build a topology for just above 5 octaves, A to C
-	bt.setLowestNote(33);
+	// Let's build a topology for 6 octaves, C to C
+	bt.setLowestNote(24);
 	bt.setBoard(0, 0, 24);
 	bt.setBoard(1, 0, 23);
 	bt.setBoard(2, 0, 23);
