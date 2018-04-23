@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <Gpio.h>
 #include <WriteFile.h>
+#include <xenomai/init.h>
 int gXenomaiInited = 0; // required by WriteFile's AuxiliaryTask
 unsigned int gAuxiliaryTaskStackSize  = 1 << 17; // required by WriteFile's AuxiliaryTask
 volatile int gShouldStop = 0;
@@ -83,17 +84,18 @@ int main(int argc, char** argv)
 		}
 		path = *argv;
 	}
+	if(!gXenomaiInited)
+	{ //initing xenomai
+		int argc = 0;
+		char *const *argv;
+		xenomai_init(&argc, &argv);
+		gXenomaiInited = 1;
+	}
 	if(lograw)
 	{
 		file.init("rawsensors.bin"); //set the file name to write to
 		file.setFileType(kBinary);
 	}
-	//Gpio testGpio;
-	//testGpio.open(66, 1);
-	//Gpio testGpio2;
-	//testGpio2.open(67, 1);
-	//Gpio testGpio3;
-	//testGpio3.open(69, 1);
 	signal(SIGINT, catch_function);
 	Keys keys;
 	keys.setDebug(false);
@@ -102,8 +104,6 @@ int main(int argc, char** argv)
 	bt.setBoard(0, 0, 24);
 	bt.setBoard(1, 0, 23);
 	bt.setBoard(2, 0, 23);
-	//bt.setBoard(0, 0, 23);
-	//bt.setBoard(1, 0, 23);
 	if(lograw)
 	{
 		keys.setPostCallback(postCallback, &keys);
