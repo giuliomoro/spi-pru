@@ -127,7 +127,7 @@ int main(int argc, char** argv)
 	Keys keys;
 	keys.setDebug(false);
 	// Let's build a topology for 6 octaves, C to C
-	bt.setLowestNote(24);
+	bt.setLowestNote(0);
 	bt.setBoard(0, 0, 24);
 	bt.setBoard(1, 0, 23);
 	bt.setBoard(2, 0, 23);
@@ -192,7 +192,7 @@ int main(int argc, char** argv)
 	{
 		for(unsigned int n = 0; n < displayKeys.size(); ++n)
 		{
-			printf("%5d  |", displayKeys[n]);
+			printf("%5d |", displayKeys[n]);
 		}
 		printf("\n");
 	}
