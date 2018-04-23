@@ -4,6 +4,7 @@
 #include <Gpio.h>
 #include <WriteFile.h>
 #include <xenomai/init.h>
+#include <vector>
 int gXenomaiInited = 0; // required by WriteFile's AuxiliaryTask
 unsigned int gAuxiliaryTaskStackSize  = 1 << 17; // required by WriteFile's AuxiliaryTask
 volatile int gShouldStop = 0;
@@ -30,7 +31,8 @@ void postCallback(void* arg, float* buffer, unsigned int length)
 void usage()
 {
 	printf(
-			"single <note> : only display full-precision value for the given key"
+			"single <note> : only display high-precision value for the given key"
+			"range <note> <note> : only display high-precision values for the given keys"
 			"raw         : log raw values as they come in from the sensor to rawsensors.bin"
 			"in <path>   : load inverse square calibration file from <path> and display calibrated values "
 			"out <path>  : generates file  <path> with key top and key bottom values. "
@@ -44,7 +46,7 @@ int main(int argc, char** argv)
 	const int noinout = 0;
 	const int in = 1;
 	const int out = 2;
-	int singleKey = -1;
+	std::vector<int> displayKeys;
 	bool lograw = false;
 	int inout = noinout;
 	char* path = NULL;
@@ -60,8 +62,33 @@ int main(int argc, char** argv)
 		{
 			--argc;
 			++argv;
-			singleKey = atoi(*argv);
+			int singleKey = atoi(*argv);
+			displayKeys.resize(1);
+			displayKeys[0] = singleKey;
 			printf("singleKey: %d\n", singleKey);
+			continue;
+		}
+		if(strcmp(*argv, "range") == 0)
+		{
+			--argc;
+			++argv;
+			int start = atoi(*argv);
+			--argc;
+			++argv;
+			int stop = atoi(*argv);
+			if(start > stop)
+			{
+				int oldStop = stop;
+				stop = start;
+				start = oldStop;
+			}
+			int numKeys = stop - start;
+			displayKeys.resize(numKeys);
+			for(int n = 0; n < numKeys; ++n)
+			{
+				displayKeys[n] = start + n;
+			}
+			printf("key range: %d to %d\n", start, stop);
 			continue;
 		}
 		if(strcmp(*argv, "raw") == 0)
@@ -161,11 +188,34 @@ int main(int argc, char** argv)
 	} else {
 		keys.useCalibration(true);
 	}
+	if(displayKeys.size() > 0)
+	{
+		for(unsigned int n = 0; n < displayKeys.size(); ++n)
+		{
+			printf("%5d  |", displayKeys[n]);
+		}
+		printf("\n");
+	}
 	while(!gShouldStop)
 	{
-		if(singleKey >= 0)
+		if(displayKeys.size() > 0)
 		{
-			printf("%.4f\n", keys.getNoteValue(singleKey));
+			for(unsigned int n = 0; n < displayKeys.size(); ++n)
+			{
+				// print fixed-point omitting all leading zeros (but not the . )
+				// e.g.: 0.0123 becomes " . 123", and 1.0123 stays "1.0123"
+				float value = keys.getNoteValue(displayKeys[n]);
+				int integer = (int)value;
+				int frac = (value - integer) * 10000;
+				int len = snprintf(NULL, 0, "%d", integer);
+				char str[len + 1];
+				if(integer == 0)
+					sprintf(str, " ");
+				else
+					sprintf(str, "%d", integer);
+				printf("%s.%4d ", str, frac);
+			}
+			printf("\n");
 			usleep(30000);	
 		}
 		else
