@@ -1,10 +1,17 @@
-#include "Keys.h"
 #include <unistd.h>
 #include <signal.h>
 #include <Gpio.h>
 #include <WriteFile.h>
 #include <xenomai/init.h>
 #include <vector>
+#define KEYS_C
+
+#ifdef KEYS_C
+#include "Keys_c.h"
+#else /* KEYS_C */
+#include "Keys.h"
+#endif /* KEYS_C */
+
 int gXenomaiInited = 0; // required by WriteFile's AuxiliaryTask
 unsigned int gAuxiliaryTaskStackSize  = 1 << 17; // required by WriteFile's AuxiliaryTask
 volatile int gShouldStop = 0;
@@ -23,7 +30,11 @@ void postCallback(void* arg, float* buffer, unsigned int length)
 	float values[numKeys];
 	for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
 	{
+#ifdef KEYS_C
+		values[n-bt.getLowestNote()] = Keys_getNoteValue(keys, n);
+#else /* KEYS_C */
 		values[n-bt.getLowestNote()] = keys->getNoteValue(n);
+#endif /* KEYS_C */
 	}
 	file.log(values, numKeys);
 }
@@ -31,15 +42,16 @@ void postCallback(void* arg, float* buffer, unsigned int length)
 void usage()
 {
 	printf(
-			"single <note> : only display high-precision value for the given key"
-			"range <note> <note> : only display high-precision values for the given keys"
-			"raw         : log raw values as they come in from the sensor to rawsensors.bin"
-			"in <path>   : load inverse square calibration file from <path> and display calibrated values "
-			"out <path>  : generates file  <path> with key top and key bottom values. "
-			"              make sure no key is been pressed. Start, wait for key values for be displayed"
-                        "              and then start pressing all keys. Hit ctrl-C when done. Once done, will display"
-			"              normalized readings.");
+			"single <note> : only display high-precision value for the given key\n"
+			"range <note> <note> : only display high-precision values for the given keys\n"
+			"raw         : log raw values as they come in from the sensor to rawsensors.bin\n"
+			"in <path>   : load inverse square calibration file from <path> and display calibrated values \n"
+			"out <path>  : generates file  <path> with key top and key bottom values. \n"
+			"              make sure no key is been pressed. Start, wait for key values for be displayed\n"
+                        "              and then start pressing all keys. Hit ctrl-C when done. Once done, will display\n"
+			"              normalized readings.\n");
 }
+Keys* keys;
 
 int main(int argc, char** argv)
 {
@@ -53,7 +65,7 @@ int main(int argc, char** argv)
 	while(++argv, --argc)
 	{
 		printf("arg: %s\n", *argv);
-		if(strcmp(*argv, "--help") == 0)
+		if(strcmp(*argv, "--help") == 0 || strcmp(*argv, "help") == 0)
 		{
 			usage();
 			return 0;
@@ -124,8 +136,12 @@ int main(int argc, char** argv)
 		file.setFileType(kBinary);
 	}
 	signal(SIGINT, catch_function);
-	Keys keys;
-	keys.setDebug(false);
+#ifdef KEYS_C
+	keys = Keys_new();
+#else /* KEYS_C */
+	keys = new Keys;
+#endif /* KEYS_C */
+
 	// Let's build a topology for 6 octaves, C to C
 	bt.setLowestNote(0);
 	bt.setBoard(0, 0, 24);
@@ -133,9 +149,17 @@ int main(int argc, char** argv)
 	bt.setBoard(2, 0, 23);
 	if(lograw)
 	{
-		keys.setPostCallback(postCallback, &keys);
+#ifdef KEYS_C
+		Keys_setPostCallback(keys, postCallback, &keys);
+#else /* KEYS_C */
+		keys->setPostCallback(postCallback, &keys);
+#endif /* KEYS_C */
 	}
-	int ret = keys.start(&bt, NULL);
+#ifdef KEYS_C
+	int ret = Keys_start(keys, &bt, NULL);
+#else /* KEYS_C */
+	int ret = keys->start(&bt, NULL);
+#endif /* KEYS_C */
 	if(ret < 0)
 	{
 		fprintf(stderr, "Error while starting the scan of the keys: %d %s\n", ret, strerror(-ret));
@@ -144,49 +168,97 @@ int main(int argc, char** argv)
 
 	if(inout == out)
 	{
-		keys.startTopCalibration();
+#ifdef KEYS_C
+		Keys_startTopCalibration(keys);
+#else /* KEYS_C */
+		keys->startTopCalibration();
+#endif /* KEYS_C */
 		printf("Top calibration...");
 		fflush(stdout);
-		while(!gShouldStop && !keys.isTopCalibrationDone())
+		while(!gShouldStop && !
+#ifdef KEYS_C
+				Keys_isTopCalibrationDone(keys)
+#else /* KEYS_C */
+				keys->isTopCalibrationDone()
+#endif /* KEYS_C */
+		     )
 		{
 			for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
-				printf("%2d ", (int)(100 * keys.getNoteValue(n)));
+				printf("%2d ", (int)(100 * 
+#ifdef KEYS_C
+							Keys_getNoteValue(keys, n)
+#else /* KEYS_C */
+							keys->getNoteValue(n)
+#endif /* KEYS_C */
+							));
 			printf("\n");
 			usleep(10000);
 		}
 		gShouldStop = 0;
 		printf("done\n");
-		keys.dumpTopCalibration();
+#ifdef KEYS_C
+		Keys_dumpTopCalibration(keys);
+#else /* KEYS_C */
+		keys->dumpTopCalibration();
+#endif /* KEYS_C */
 	
 		printf("Bottom calibration...");
 		fflush(stdout);
-		keys.startBottomCalibration();
+#ifdef KEYS_C
+		Keys_startBottomCalibration(keys);
+#else /* KEYS_C */
+		keys->startBottomCalibration();
+#endif /* KEYS_C */
 		while(!gShouldStop)
 		{
 			printf("bot calib ");
 			for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
-				printf("%2d ", (int)(100 * keys.getNoteValue(n)));
+				printf("%2d ", (int)(100 * 
+#ifdef KEYS_C
+							Keys_getNoteValue(keys, n)
+#else /* KEYS_C */
+							keys->getNoteValue(n)
+#endif /* KEYS_C */
+					));
 			printf("\n");
 			usleep(100000);	
 		}
 		gShouldStop = 0;
 		printf("done\n");
-		keys.stopBottomCalibration();
-		keys.dumpBottomCalibration();
-	
-		keys.saveLinearCalibrationFile(path);
+#ifdef KEYS_C
+		Keys_stopBottomCalibration(keys);
+		Keys_dumpBottomCalibration(keys);
+		Keys_saveLinearCalibrationFile(keys, path);
+#else /* KEYS_C */
+		keys->stopBottomCalibration();
+		keys->dumpBottomCalibration();
+		keys->saveLinearCalibrationFile(path);
+#endif /* KEYS_C */
 	}
 	if(inout == in)
 	{
-		keys.startTopCalibration();
 		printf("Loading calibration file %s\n", path);
-		keys.loadInverseSquareCalibrationFile(path);
+#ifdef KEYS_C
+		Keys_startTopCalibration(keys);
+		Keys_loadInverseSquareCalibrationFile(keys, path);
+#else /* KEYS_C */
+		keys->startTopCalibration();
+		keys->loadInverseSquareCalibrationFile(path);
+#endif /* KEYS_C */
 	}
 	if(inout == noinout)
 	{
-		keys.useCalibration(false);
+#ifdef KEYS_C
+		Keys_useCalibration(keys, false);
+#else /* KEYS_C */
+		keys->useCalibration(false);
+#endif /* KEYS_C */
 	} else {
-		keys.useCalibration(true);
+#ifdef KEYS_C
+		Keys_useCalibration(keys, true);
+#else /* KEYS_C */
+		keys->useCalibration(true);
+#endif /* KEYS_C */
 	}
 	if(displayKeys.size() > 0)
 	{
@@ -204,7 +276,11 @@ int main(int argc, char** argv)
 			{
 				// print fixed-point omitting all leading zeros (but not the . )
 				// e.g.: 0.0123 becomes " . 123", and 1.0123 stays "1.0123"
-				float value = keys.getNoteValue(displayKeys[n]);
+#ifdef KEYS_C
+				float value = Keys_getNoteValue(keys, displayKeys[n]);
+#else /* KEYS_C */
+				float value = keys->getNoteValue(displayKeys[n]);
+#endif /* KEYS_C */
 				int integer = (int)value;
 				int frac = (value - integer) * 10000;
 				int len = snprintf(NULL, 0, "%d", integer);
@@ -213,7 +289,10 @@ int main(int argc, char** argv)
 					sprintf(str, " ");
 				else
 					sprintf(str, "%d", integer);
-				printf("%s.%4d ", str, frac);
+				if(integer)
+					printf("%s.%04d ", str, frac);
+				else
+					printf("%s.%4d ", str, frac);
 			}
 			printf("\n");
 			usleep(30000);	
@@ -221,12 +300,24 @@ int main(int argc, char** argv)
 		else
 		{
 			for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
-				printf("%X ", (int)(10 * keys.getNoteValue(n)));
+				printf("%X ", (int)(10 * 
+#ifdef KEYS_C
+							Keys_getNoteValue(keys, n)
+#else /* KEYS_C */
+							keys->getNoteValue(n)
+#endif /* KEYS_C */
+							));
 			printf("\n");
 			usleep(100000);	
 		}
 	}
-	keys.stop();
+#ifdef KEYS_C
+	Keys_stop(keys);
+	Keys_delete(keys);
+#else /* KEYS_C */
+	keys->stop();
+	delete keys;
+#endif /* KEYS_C */
 	
 	return 0;
 }

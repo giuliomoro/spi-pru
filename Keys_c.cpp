@@ -31,7 +31,7 @@ float Keys_getNoteValue(Keys* that, int note)
 	return that->getNoteValue(note);
 }
 
-int Keys_loadCalibrationFile(Keys* that, const char* path)
+int Keys_loadInverseSquareCalibrationFile(Keys* that, const char* path)
 {
 	return that->loadInverseSquareCalibrationFile(path);
 }
