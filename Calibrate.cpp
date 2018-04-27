@@ -38,8 +38,6 @@ void Calibration::apply(float* out, int16_t* in, unsigned int length)
 	{
 		for(unsigned int n = 0; n < length; ++n)
 		{
-			if(n != length - 1)
-				continue;
 			static const int16_t keyNotAtRestThreshold = 30;
 			int16_t inValue = in[n];
 			int32_t topValue = top[n];
