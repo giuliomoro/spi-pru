@@ -262,10 +262,10 @@ int main(int argc, char** argv)
 		printf("Loading calibration file %s\n", path);
 #ifdef KEYS_C
 		Keys_startTopCalibration(keys);
-		Keys_loadInverseSquareCalibrationFile(keys, path);
+		Keys_loadInverseSquareCalibrationFile(keys, path, 0);
 #else /* KEYS_C */
 		keys->startTopCalibration();
-		keys->loadInverseSquareCalibrationFile(path);
+		keys->loadInverseSquareCalibrationFile(path, 0);
 #endif /* KEYS_C */
 	}
 	if(inout == noinout)

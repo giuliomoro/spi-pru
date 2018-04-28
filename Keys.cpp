@@ -265,7 +265,7 @@ bool Keys::saveLinearCalibrationFile(const char* path)
 	return true;
 }
 
-bool Keys::loadInverseSquareCalibrationFile(const char* path)
+bool Keys::loadInverseSquareCalibrationFile(const char* path, int offset)
 {
 	// format: [note#] [top] [bottom] [a] [b] [c] 
 	// where a, b, c are the parameters of the
@@ -293,6 +293,7 @@ bool Keys::loadInverseSquareCalibrationFile(const char* path)
 			inputFile >> c;
 			if(inputFile.fail())
 				break; // in case we went past end of file anyhow
+			note += offset;
 			int board = _bt->findBoardFromNote(note);
 			int key = _bt->findKeyFromNote(note);
 			if(board >= 0 && key >= 0)

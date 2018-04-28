@@ -20,7 +20,7 @@ void Keys_stopAndWait(Keys* that);
 
 float Keys_getNoteValue(Keys* that, int note);
 
-int Keys_loadInverseSquareCalibrationFile(Keys* that, const char* path);
+int Keys_loadInverseSquareCalibrationFile(Keys* that, const char* path, int offset);
 
 int Keys_saveLinearCalibrationFile(Keys* that, const char* path);
 
