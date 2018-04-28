@@ -23,6 +23,13 @@ void catch_function(int signo){
 BoardsTopology bt;
 WriteFile file;
 
+bool isWhiteKey(int key)
+{
+	key = (key % 12);
+	if(key == 1 || key == 3 || key == 6 || key == 8 || key == 10)
+		return false;
+	return true;
+}
 void postCallback(void* arg, float* buffer, unsigned int length)
 {
 	Keys* keys = (Keys*)arg;
@@ -44,12 +51,15 @@ void usage()
 	printf(
 			"single <note> : only display high-precision value for the given key\n"
 			"range <note> <note> : only display high-precision values for the given keys\n"
+			"white :       only show high-precision values for white keys, and thresholded \"top\" position for black ones.\n"
+			"black :       only show high-precision values for black keys, and thresholded \"bottom\" position for white ones.\n"
 			"raw         : log raw values as they come in from the sensor to rawsensors.bin\n"
 			"in <path>   : load inverse square calibration file from <path> and display calibrated values \n"
 			"out <path>  : generates file  <path> with key top and key bottom values. \n"
 			"              make sure no key is been pressed. Start, wait for key values for be displayed\n"
                         "              and then start pressing all keys. Hit ctrl-C when done. Once done, will display\n"
-			"              normalized readings.\n");
+			"              normalized readings.\n"
+			);
 }
 Keys* keys;
 
@@ -59,6 +69,8 @@ int main(int argc, char** argv)
 	const int in = 1;
 	const int out = 2;
 	std::vector<int> displayKeys;
+	bool whiteHp = true;
+	bool blackHp = true;
 	bool lograw = false;
 	int inout = noinout;
 	char* path = NULL;
@@ -101,6 +113,16 @@ int main(int argc, char** argv)
 				displayKeys[n] = start + n;
 			}
 			printf("key range: %d to %d\n", start, stop);
+			continue;
+		}
+		if(strcmp(*argv, "white") == 0)
+		{
+			blackHp = false;
+			continue;
+		}
+		if(strcmp(*argv, "black") == 0)
+		{
+			whiteHp = false;
 			continue;
 		}
 		if(strcmp(*argv, "raw") == 0)
@@ -281,6 +303,16 @@ int main(int argc, char** argv)
 #else /* KEYS_C */
 				float value = keys->getNoteValue(displayKeys[n]);
 #endif /* KEYS_C */
+				// Optionally, only show high-precision for white or black
+				bool isWhite = isWhiteKey(displayKeys[n]);
+				if( !((isWhite && whiteHp) || (!isWhite && blackHp)) )
+				{
+					// and if it's not high precision, threshold:
+					if(isWhite) // is white far from bottom?
+						value = value > 0.05;
+					else // is black far from top?
+						value = value > 0.999;
+				}
 				int integer = (int)value;
 				int frac = (value - integer) * 10000;
 				int len = snprintf(NULL, 0, "%d", integer);
