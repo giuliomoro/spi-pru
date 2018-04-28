@@ -28,6 +28,7 @@ public:
 		, _pruEnabled(false)
 		, _isPruRunning(false)
 		, _isLoopRunning(false)
+		,_loopTask(0)
 		, _validData(0)
 		, context(NULL)
 	{ }

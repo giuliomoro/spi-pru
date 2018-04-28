@@ -30,7 +30,7 @@ int Keys::start(BoardsTopology* bt, volatile int* shouldStop /* = NULL */)
 #ifdef PRINT_ONE_KEY
 	rt_print_auto_init(1);
 #endif /* PRINT_ONE_KEY */
-	stop();
+	stopAndWait();
 	// TODO: wait for stop
 
 	_bt = bt;

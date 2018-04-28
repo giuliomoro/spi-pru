@@ -163,7 +163,9 @@ int PruSpiKeysDriver::start(volatile int* shouldStop, void(*callback)(void*), vo
 void PruSpiKeysDriver::stopAndWait()
 {
 	stop();
-	__wrap_pthread_join(_loopTask, NULL);
+	if(_loopTask)
+		__wrap_pthread_join(_loopTask, NULL);
+	_loopTask = 0;
 }
 void PruSpiKeysDriver::stop()
 {
