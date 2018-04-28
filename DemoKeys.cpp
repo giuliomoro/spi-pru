@@ -150,9 +150,9 @@ int main(int argc, char** argv)
 	if(lograw)
 	{
 #ifdef KEYS_C
-		Keys_setPostCallback(keys, postCallback, &keys);
+		Keys_setPostCallback(keys, postCallback, keys);
 #else /* KEYS_C */
-		keys->setPostCallback(postCallback, &keys);
+		keys->setPostCallback(postCallback, keys);
 #endif /* KEYS_C */
 	}
 #ifdef KEYS_C
