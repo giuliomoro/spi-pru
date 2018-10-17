@@ -221,10 +221,10 @@ void PruSpiKeysDriver::loop(void* arg)
 		{
 			static int interruptTimeoutCount = 0;
 			++interruptTimeoutCount;
-			rt_fprintf(stderr, "SPI PRU interrupt timeout, %d %d %s\n", ret, errno, strerror(errno));
+			fprintf(stderr, "SPI PRU interrupt timeout, %d %d %s\n", ret, errno, strerror(errno));
 			if(interruptTimeoutCount >= 5)
 			{
-				fprintf(stderr, "The SPI PRU stopped responding. Quitting.\n");
+				fprintf(stderr, "The SPI PRU stopped responding. Quitting. If you are running a Bela program on the side, make sure to run it with: `--pru-number 0 -G 0`\n");
 				gShouldStop = 1;
 				break;
 			}
