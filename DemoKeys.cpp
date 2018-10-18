@@ -75,6 +75,7 @@ int main(int argc, char** argv)
 	bool blackHp = true;
 	bool lograw = false;
 	int inout = noinout;
+	int highPrecision = 0;
 	char* path = NULL;
 	while(++argv, --argc)
 	{
@@ -96,6 +97,7 @@ int main(int argc, char** argv)
 		}
 		if(strcmp(*argv, "range") == 0)
 		{
+			highPrecision = 1;
 			--argc;
 			++argv;
 			int start = atoi(*argv);
@@ -173,6 +175,16 @@ int main(int argc, char** argv)
 	bt.setBoard(0, 0, 24);
 	bt.setBoard(1, 0, 23);
 	bt.setBoard(2, 0, 23);
+	if(displayKeys.size() == 0)
+	{
+		// default: all the keys from getLowestNote to getHighestNote
+		unsigned int start = bt.getLowestNote();
+		displayKeys.resize(bt.getHighestNote() - start + 1);
+		for(unsigned int n = 0; n < displayKeys.size(); ++n)
+		{
+			displayKeys[n] = n + start;
+		}
+	}
 	if(lograw)
 	{
 #ifdef KEYS_C
@@ -209,14 +221,17 @@ int main(int argc, char** argv)
 #endif /* KEYS_C */
 		     )
 		{
-			for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
+			for(int n = 0; n < displayKeys.size(); ++n)
+			{
+				unsigned int idx = displayKeys[n];
 				printf("%2d ", (int)(100 * 
 #ifdef KEYS_C
-							Keys_getNoteValue(keys, n)
+					Keys_getNoteValue(keys, idx)
 #else /* KEYS_C */
-							keys->getNoteValue(n)
+					keys->getNoteValue(idx)
 #endif /* KEYS_C */
-							));
+				));
+			}
 			printf("\n");
 			usleep(10000);
 		}
@@ -238,14 +253,17 @@ int main(int argc, char** argv)
 		while(!gShouldStop)
 		{
 			printf("bot calib ");
-			for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
+			for(unsigned int n = 0; n < displayKeys.size(); ++n)
+			{
+				unsigned int idx = displayKeys[n];
 				printf("%2d ", (int)(100 * 
 #ifdef KEYS_C
-							Keys_getNoteValue(keys, n)
+					Keys_getNoteValue(keys, idx)
 #else /* KEYS_C */
-							keys->getNoteValue(n)
+					keys->getNoteValue(idx)
 #endif /* KEYS_C */
 					));
+			}
 			printf("\n");
 			usleep(100000);	
 		}
@@ -263,7 +281,7 @@ int main(int argc, char** argv)
 	}
 	if(inout == in || inout == lin)
 	{
-		printf("Loading calibration file %s\n", path);
+		printf("Loading %s calibration file %s\n", inout == in ? "InverseSquare" : "Linear", path);
 		if(inout == in)
 		{
 #ifdef KEYS_C
@@ -299,37 +317,44 @@ int main(int argc, char** argv)
 		keys->useCalibration(true);
 #endif /* KEYS_C */
 	}
-	if(displayKeys.size() > 0)
+	for(unsigned int n = 0; n < displayKeys.size(); ++n)
+	{
+		printf("%5d |", displayKeys[n]);
+	}
+	printf("\n");
+	if(!highPrecision)
+	{
+#ifdef KEYS_C
+		Keys_setHardClip(keys, true);
+#else /* KEYS_C */
+		keys->setHardClip(true);
+#endif /* KEYS_C */
+	}
+
+	while(!gShouldStop)
 	{
 		for(unsigned int n = 0; n < displayKeys.size(); ++n)
 		{
-			printf("%5d |", displayKeys[n]);
-		}
-		printf("\n");
-	}
-	while(!gShouldStop)
-	{
-		if(displayKeys.size() > 0)
-		{
-			for(unsigned int n = 0; n < displayKeys.size(); ++n)
-			{
-				// print fixed-point omitting all leading zeros (but not the . )
-				// e.g.: 0.0123 becomes " . 123", and 1.0123 stays "1.0123"
+			// print fixed-point omitting all leading zeros (but not the . )
+			// e.g.: 0.0123 becomes " . 123", and 1.0123 stays "1.0123"
 #ifdef KEYS_C
-				float value = Keys_getNoteValue(keys, displayKeys[n]);
+			float value = Keys_getNoteValue(keys, displayKeys[n]);
 #else /* KEYS_C */
-				float value = keys->getNoteValue(displayKeys[n]);
+			float value = keys->getNoteValue(displayKeys[n]);
 #endif /* KEYS_C */
-				// Optionally, only show high-precision for white or black
-				bool isWhite = isWhiteKey(displayKeys[n]);
-				if( !((isWhite && whiteHp) || (!isWhite && blackHp)) )
-				{
-					// and if it's not high precision, threshold:
-					if(isWhite) // is white far from bottom?
-						value = value > 0.05;
-					else // is black far from top?
-						value = value > 0.999;
-				}
+			// Optionally, only show high-precision for white or black
+			bool isWhite = isWhiteKey(displayKeys[n]);
+			if( !((isWhite && whiteHp) || (!isWhite && blackHp)) )
+			{
+				// and if it's not high precision, threshold:
+				if(isWhite) // is white far from bottom?
+					value = value > 0.05;
+				else // is black far from top?
+					value = value > 0.999;
+			}
+			{
+			if(highPrecision)
+			{
 				int integer = (int)value;
 				int frac = (value - integer) * 10000;
 				int len = snprintf(NULL, 0, "%d", integer);
@@ -342,23 +367,13 @@ int main(int argc, char** argv)
 					printf("%s.%04d ", str, frac);
 				else
 					printf("%s.%4d ", str, frac);
+			} else {
+				printf("%X ", (int)(10 * value));
 			}
-			printf("\n");
-			usleep(30000);	
+			}
 		}
-		else
-		{
-			for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
-				printf("%X ", (int)(10 * 
-#ifdef KEYS_C
-							Keys_getNoteValue(keys, n)
-#else /* KEYS_C */
-							keys->getNoteValue(n)
-#endif /* KEYS_C */
-							));
-			printf("\n");
-			usleep(100000);	
-		}
+		printf("\n");
+		usleep(30000);
 	}
 #ifdef KEYS_C
 	Keys_stop(keys);
