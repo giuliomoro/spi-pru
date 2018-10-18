@@ -55,8 +55,9 @@ void usage()
 			"black :       only show high-precision values for black keys, and thresholded \"bottom\" position for white ones.\n"
 			"raw         : log raw values as they come in from the sensor to rawsensors.bin\n"
 			"in <path>   : load inverse square calibration file from <path> and display calibrated values \n"
+			"lin <path>  : load linear calibration file from <path> and display calibrated values \n"
 			"out <path>  : generates file  <path> with key top and key bottom values. \n"
-			"              make sure no key is been pressed. Start, wait for key values for be displayed\n"
+			"              make sure no key is been pressed. Start, wait for key values to be displayed\n"
                         "              and then start pressing all keys. Hit ctrl-C when done. Once done, will display\n"
 			"              normalized readings.\n"
 			);
@@ -68,6 +69,7 @@ int main(int argc, char** argv)
 	const int noinout = 0;
 	const int in = 1;
 	const int out = 2;
+	const int lin = 3;
 	std::vector<int> displayKeys;
 	bool whiteHp = true;
 	bool blackHp = true;
@@ -133,6 +135,8 @@ int main(int argc, char** argv)
 		}
 		if(strcmp(*argv, "in") == 0)
 			inout = in;
+		if(strcmp(*argv, "lin") == 0)
+			inout = lin;
 		if(strcmp(*argv, "out") == 0)
 			inout = out;
 		--argc;
@@ -257,16 +261,29 @@ int main(int argc, char** argv)
 		keys->saveLinearCalibrationFile(path);
 #endif /* KEYS_C */
 	}
-	if(inout == in)
+	if(inout == in || inout == lin)
 	{
 		printf("Loading calibration file %s\n", path);
+		if(inout == in)
+		{
 #ifdef KEYS_C
-		Keys_startTopCalibration(keys);
-		Keys_loadInverseSquareCalibrationFile(keys, path, 0);
+			Keys_startTopCalibration(keys);
+			Keys_loadInverseSquareCalibrationFile(keys, path, 0);
 #else /* KEYS_C */
-		keys->startTopCalibration();
-		keys->loadInverseSquareCalibrationFile(path, 0);
+			keys->startTopCalibration();
+			keys->loadInverseSquareCalibrationFile(path, 0);
 #endif /* KEYS_C */
+		}
+		if(inout == lin)
+		{
+#ifdef KEYS_C
+			Keys_startTopCalibration(keys);
+			Keys_loadLinearCalibrationFile(keys, path);
+#else /* KEYS_C */
+			keys->startTopCalibration();
+			keys->loadLinearCalibrationFile(path);
+#endif /* KEYS_C */
+		}
 	}
 	if(inout == noinout)
 	{
