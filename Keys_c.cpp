@@ -36,6 +36,11 @@ int Keys_loadInverseSquareCalibrationFile(Keys* that, const char* path, int offs
 	return that->loadInverseSquareCalibrationFile(path, offset);
 }
 
+int Keys_loadLinearCalibrationFile(Keys* that, const char* path)
+{
+	return that->loadLinearCalibrationFile(path);
+}
+
 int Keys_saveLinearCalibrationFile(Keys* that, const char* path)
 {
 	return that->saveLinearCalibrationFile(path);

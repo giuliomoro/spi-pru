@@ -313,7 +313,7 @@ bool Keys::loadInverseSquareCalibrationFile(const char* path, int offset)
 	useCalibration(true);
 	return true;
 }
-/*
+
 bool Keys::loadLinearCalibrationFile(const char* path)
 {
 	// format: [note#] [board] [top] [bottom]
@@ -347,7 +347,7 @@ bool Keys::loadLinearCalibrationFile(const char* path)
 	useCalibration(true);
 	return true;
 }
-*/
+
 void Keys::useCalibration(bool shouldUse)
 {
 	_shouldUseCalibration = shouldUse;
