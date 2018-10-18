@@ -72,3 +72,35 @@ void Calibration::apply(float* out, int16_t* in, unsigned int length)
 		}
 	}
 }
+
+void Calibration::calibrateTop(int16_t* buffer, int length)
+{
+	if(topCalibrationCount == 0)
+	{
+		initTopCalibration();
+	}
+	if(topCalibrationCount >= topCalibrateMax)
+	{
+		// we are done with calibration, why do you keep asking?
+		return;
+	}
+
+	++topCalibrationCount;
+	if(topCalibrationCount <= topCalibrateMin)
+	{
+		// we ignore the first few readings as they may be a bit wobbly
+		return;
+	}
+	for(int n = 0; n < length; ++n)
+	{
+		top[n] += buffer[n];
+	}
+
+	if(topCalibrationCount == topCalibrateMax)
+	{
+		for(int n = 0; n < length; ++n)
+		{
+			top[n] /= topCalibrationCount - topCalibrateMin;
+		}
+	}
+}

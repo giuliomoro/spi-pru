@@ -16,27 +16,7 @@ public:
 		inverseSquareParams(numKeys)
 	{}
 
-	void calibrateTop(int16_t* buffer, int length)
-	{
-		if(topCalibrationCount == 0)
-		{
-			initTopCalibration();
-		}
-
-		for(int n = 0; n < length; ++n)
-		{
-			top[n] += buffer[n];
-		}
-
-		++topCalibrationCount;
-		if(topCalibrationCount == topCalibrateMax)
-		{
-			for(int n = 0; n < length; ++n)
-			{
-				top[n] /= topCalibrationCount;
-			}
-		}
-	}
+	void calibrateTop(int16_t* buffer, int length);
 
 	void setInverseSquareParams(unsigned int position, int32_t topValue, int16_t bottomValue, float a, float b, float c);
 
@@ -116,6 +96,7 @@ private:
 		float c;
 	} InverseSquareParams;
 	std::vector<InverseSquareParams> inverseSquareParams;
+	const int topCalibrateMin = 10;
 	const int topCalibrateMax = 30;
 
 	void initBottomCalibration()
