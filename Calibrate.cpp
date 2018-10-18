@@ -27,10 +27,6 @@ void Calibration::apply(float* out, int16_t* in, unsigned int length)
 				outValue = 1;
 			else
 				outValue = (inValue - bottomValue) / (float)range;
-			if(outValue < 0)
-				outValue = 0;
-			if(outValue > 1)
-				outValue = 1;
 			out[n] = outValue;
 		}
 	}
@@ -63,12 +59,18 @@ void Calibration::apply(float* out, int16_t* in, unsigned int length)
 
 			float outValue;
 			outValue = 1 - (- b + sqrtf_neon(a / (inValue / 4096.f - c)));
-			// clip value to range before writing
-			if(outValue < 0)
-				outValue = 0;
-			if(outValue > 1)
-				outValue = 1;
 			out[n] = outValue;
+		}
+	}
+	if(hardClip)
+	{
+		for(unsigned int n = 0; n < length; ++n)
+		{
+			// clip value to range [0, 1]
+			if(out[n] < 0)
+				out[n] = 0;
+			if(out[n] > 1)
+				out[n] = 1;
 		}
 	}
 }
@@ -103,4 +105,9 @@ void Calibration::calibrateTop(int16_t* buffer, int length)
 			top[n] /= topCalibrationCount - topCalibrateMin;
 		}
 	}
+}
+
+void Calibration::setHardClip(bool shouldHardClip)
+{
+	hardClip = shouldHardClip;
 }

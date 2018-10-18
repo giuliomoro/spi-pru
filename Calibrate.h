@@ -83,6 +83,8 @@ public:
 
 	void apply(float* out, int16_t* in, unsigned int length);
 
+	void setHardClip(bool shouldHardClip);
+
 private:
 	int topCalibrationCount;
 	int bottomCalibrationCount;
@@ -98,6 +100,7 @@ private:
 	std::vector<InverseSquareParams> inverseSquareParams;
 	const int topCalibrateMin = 10;
 	const int topCalibrateMax = 30;
+	bool hardClip = false;
 
 	void initBottomCalibration()
 	{
