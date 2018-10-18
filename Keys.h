@@ -79,6 +79,8 @@ public:
 
 	void useCalibration(bool shouldUse);
 
+	void setHardClip(bool shouldClip);
+
 	void setDebug(bool should);
 
 private:

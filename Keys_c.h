@@ -42,6 +42,8 @@ void Keys_dumpBottomCalibration(Keys* that);
 
 void Keys_useCalibration(Keys* that, int shouldUse);
 
+void Keys_setHardClip(Keys* that, int shouldClip);
+
 void Keys_setPostCallback(Keys* that, void(*postCallback)(void*, float*, unsigned int), void* arg);
 
 #ifdef __cplusplus

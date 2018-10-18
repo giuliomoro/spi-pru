@@ -87,6 +87,12 @@ void Keys_useCalibration(Keys* that, int shouldUse)
 	that->useCalibration(shouldUse);
 }
 
+
+void Keys_setHardClip(Keys* that, int shouldClip)
+{
+	that->setHardClip(shouldClip);
+}
+
 void Keys_setPostCallback(Keys* that, void(*postCallback)(void*, float*, unsigned int), void* arg)
 {
 	that->setPostCallback(postCallback, arg);
