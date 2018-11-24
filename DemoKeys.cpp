@@ -21,7 +21,7 @@ void catch_function(int signo){
 }
 
 BoardsTopology bt;
-WriteFile file;
+WriteFile* file;
 
 bool isWhiteKey(int key)
 {
@@ -43,7 +43,8 @@ void postCallback(void* arg, float* buffer, unsigned int length)
 		values[n-bt.getLowestNote()] = keys->getNoteValue(n);
 #endif /* KEYS_C */
 	}
-	file.log(values, numKeys);
+	if(file)
+		file->log(values, numKeys);
 }
 
 void usage()
@@ -160,8 +161,9 @@ int main(int argc, char** argv)
 	}
 	if(lograw)
 	{
-		file.init("rawsensors.bin"); //set the file name to write to
-		file.setFileType(kBinary);
+		file = new WriteFile;
+		file->init("rawsensors.bin"); //set the file name to write to
+		file->setFileType(kBinary);
 	}
 	signal(SIGINT, catch_function);
 #ifdef KEYS_C
@@ -376,12 +378,13 @@ int main(int argc, char** argv)
 		usleep(30000);
 	}
 #ifdef KEYS_C
-	Keys_stop(keys);
+	Keys_stopAndWait(keys);
 	Keys_delete(keys);
 #else /* KEYS_C */
-	keys->stop();
+	keys->stopAndWait();
 	delete keys;
 #endif /* KEYS_C */
+	delete file;
 	
 	return 0;
 }
