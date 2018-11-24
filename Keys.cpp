@@ -356,7 +356,10 @@ void Keys::useCalibration(bool shouldUse)
 void Keys::setHardClip(bool shouldClip)
 {
 	for(auto &c : calibration)
-		c->setHardClip(shouldClip);
+	{
+		if(c)
+			c->setHardClip(shouldClip);
+	}
 }
 void Keys::setDebug(bool should)
 {
