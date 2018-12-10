@@ -17,10 +17,47 @@ extern int gXenomaiInited;
 #define LOCAL_COPY
 #define GPIO_DEBUG
 #define PRU_USE_RTDM
+#define PRU_SPI_XENOMAI
+
+#ifndef PRU_SPI_XENOMAI
+#undef PRU_USE_RTDM // can't use RTDM if not Xenomai!
+inline int create_and_start_thread_nonrt(pthread_t* task, const char* taskName, int priority, int stackSize, pthread_callback_t* callback, void* arg)
+{
+	pthread_attr_t attr;
+	if(pthread_attr_init(&attr))
+	{
+		fprintf(stderr, "Error: unable to init thread attributes\n");
+		return -1;
+	}
+	if(int ret = set_thread_stack_and_priority(&attr, stackSize, priority)) // nothing Xenomai-specific in this call
+	{
+		return ret;
+	}
+	if(int ret = pthread_create(task, &attr, callback, arg))
+	{
+		return ret;
+	}
+	int ret = pthread_setname_np(*task, taskName);
+	if(ret)
+	{
+		fprintf(stderr, "Error setting thread name: %d %s\n", ret, strerror(ret));
+	}
+	// check that effective parameters match the ones we requested
+	//pthread_attr_t actualAttr;
+	//pthread_getattr_np(*task, &actualAttr);
+	//size_t stk;
+	//pthread_attr_getstacksize(&actualAttr, &stk);
+	//printf("measured stack: %d, requested stack: %d\n", stk, stackSize);
+
+	pthread_attr_destroy(&attr);
+	return 0;
+}
+#endif /* not PRU_SPI_XENOMAI */
+
 #ifdef PRU_USE_RTDM
 static char rtdm_driver[] = "/dev/rtdm/rtdm_pruss_irq_0";
 static int rtdm_fd;
-#endif
+#endif /* PRU_USE_RTDM */
 
 static const uint32_t Polynomial = 0x04C11DB7;
 
@@ -133,7 +170,11 @@ int PruSpiKeysDriver::start(volatile int* shouldStop, void(*callback)(void*), vo
 		return -1;
 	}
 #endif /* PRU_USE_RTDM */
-	ret = create_and_start_thread(&_loopTask, _loopTaskName, _loopTaskPriority, 0, (pthread_callback_t*)loop, (void*)this);
+#ifdef PRU_SPI_XENOMAI
+	ret = create_and_start_thread(&_loopTask, _loopTaskName, _loopTaskPriority, 1 << 17, (pthread_callback_t*)loop, (void*)this);
+#else /* PRU_SPI_XENOMAI */
+	ret = create_and_start_thread_nonrt(&_loopTask, "PruSpiDriver", _loopTaskPriority, 1 << 17, (pthread_callback_t*)loop, (void*)this);
+#endif /* PRU_SPI_XENOMAI */
 	if(ret)
 	{
 		fprintf(stderr, "Failed to create thread: %d\n", ret);
@@ -234,7 +275,11 @@ void PruSpiKeysDriver::loop(void* arg)
 		int buffer = that->getActiveBuffer();
 #ifndef PRU_USE_RTDM
 		if(lastBuffer == buffer){
+#ifdef PRU_SPI_XENOMAI
 			task_sleep_ns(300000);
+#else /* PRU_SPI_XENOMAI */
+			usleep(300);
+#endif /* PRU_SPI_XENOMAI */
 			continue;
 		}
 #endif /* PRU_USE_RTDM */
