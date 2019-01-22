@@ -34,7 +34,6 @@ void Calibration::apply(float* out, int16_t* in, unsigned int length)
 	{
 		for(unsigned int n = 0; n < length; ++n)
 		{
-			static const int16_t keyNotAtRestThreshold = 30;
 			int16_t inValue = in[n];
 			int32_t topValue = top[n];
 			int16_t bottomValue = bottom[n];
@@ -45,14 +44,6 @@ void Calibration::apply(float* out, int16_t* in, unsigned int length)
 			int16_t range = topValue - bottomValue + 1;
 			if(range < 80 && range > -80)
 			{
-				out[n] = 1;
-				continue;
-			}
-			else if(!(topValue - inValue > keyNotAtRestThreshold))
-			{
-// we check if the key is far enough from the rest position.
-// we do this with the linear sensor reading to avoid computing the
-// inverse square for all the keys and save some CPU
 				out[n] = 1;
 				continue;
 			}
