@@ -5,6 +5,12 @@
 #include <xenomai/init.h>
 #include <vector>
 #define KEYS_C
+#define SCOPE
+
+#ifdef SCOPE
+#include <Scope.h>
+Scope gScope;
+#endif /* SCOPE */
 
 #ifdef KEYS_C
 #include "Keys_c.h"
@@ -12,6 +18,7 @@
 #include "Keys.h"
 #endif /* KEYS_C */
 
+std::vector<int> displayKeys;
 int gXenomaiInited = 0; // required by WriteFile's AuxiliaryTask
 unsigned int gAuxiliaryTaskStackSize  = 1 << 17; // required by WriteFile's AuxiliaryTask
 volatile int gShouldStop = 0;
@@ -35,16 +42,52 @@ void postCallback(void* arg, float* buffer, unsigned int length)
 	Keys* keys = (Keys*)arg;
 	unsigned int numKeys = bt.getHighestNote() - bt.getLowestNote() + 1;
 	float values[numKeys];
+	float minValue = 1;
+	int minKey = -1;
 	for(int n = bt.getLowestNote(); n <= bt.getHighestNote(); ++n)
 	{
 #ifdef KEYS_C
-		values[n-bt.getLowestNote()] = Keys_getNoteValue(keys, n);
+		float value = Keys_getNoteValue(keys, n);
 #else /* KEYS_C */
-		values[n-bt.getLowestNote()] = keys->getNoteValue(n);
+		float value = keys->getNoteValue(n);
 #endif /* KEYS_C */
+#ifdef SCOPE
+		values[n-bt.getLowestNote()] = value;
+		if(value != 0 && value < minValue) // the != 0 is because unconnected boards will read exactly 0, so we rule that out
+		{
+			minKey = n;
+			minValue = value;
+		}
+#endif /* SCOPE */
 	}
 	if(file)
 		file->log(values, numKeys);
+#ifdef SCOPE
+#if 0
+	static int currentKey = -1;
+	if(minValue < 0.3 & minKey >= 0)
+	{
+		currentKey = minKey;
+	}
+	if(currentKey >= 0)
+	{
+		for(int n = 0; n < numKeys; ++n)
+		{
+			if(n != currentKey)
+			{
+				//values[n] = 0;
+			}
+		}
+	}
+#endif
+	float logs[displayKeys.size()];
+	for(int n = 0; n < displayKeys.size(); ++n)
+	{
+		logs[n] = keys->getNoteValue(displayKeys[n]) - 0.1;
+	}
+
+	gScope.log(logs);
+#endif /* SCOPE */
 }
 
 void usage()
@@ -71,7 +114,6 @@ int main(int argc, char** argv)
 	const int in = 1;
 	const int out = 2;
 	const int lin = 3;
-	std::vector<int> displayKeys;
 	bool whiteHp = true;
 	bool blackHp = true;
 	bool lograw = false;
@@ -187,7 +229,14 @@ int main(int argc, char** argv)
 			displayKeys[n] = n + start;
 		}
 	}
-	if(lograw)
+#ifdef SCOPE
+	gScope.setup(displayKeys.size(), 1000);
+#endif /* SCOPE */
+	if(lograw
+#ifdef SCOPE
+		|| 1
+#endif /* SCOPE */
+	)
 	{
 #ifdef KEYS_C
 		Keys_setPostCallback(keys, postCallback, keys);
